@@ -95,7 +95,11 @@ class Rank(Enum):
     KING = 10
     ACE = 11
 
-
+class CardEnhancement(Enum):
+    NONE = 0
+    FOIL = 1  # +50 chips
+    HOLO = 2  # +10 mult
+    POLY = 3  # x1.5 mult
 
 
 

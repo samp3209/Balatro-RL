@@ -1,20 +1,67 @@
-class Card(object):
-    def __init__(self):
-        self.spade = False
-        self.club = False
-        self.heart = False
-        self.diamond = False
-        self.rank = 0
-        self.foil = False # foil +50 chips
-        self.holo = False # holographic +10 mult
-        self.poly = False # polychrome x1.5 mult
-        self.face = False # is face card?
-        self.played_this_ante = False # has this card been played in this round
-        self.in_deck = True # is the card in the deck still
-        self.in_hand = False # is the card in the hand played
-        self.played = False # was the card played
-        self.scored = False # did this card score when it was played?
-        self.discarded = False # was the card discarded
+from Enums import *
+class Card:
+    def __init__(self, suit: Suit, rank: Rank):
+        # Suit information
+        self.suit = suit
+        
+        # Rank information
+        self.rank = rank
+        
+        # Enhancements
+        self.enhancement = CardEnhancement.NONE
+        
+        # Card state
+        self.face = rank.value >= Rank.JACK.value and rank.value < Rank.ACE.value
+        self.played_this_ante = False
+        self.in_deck = True
+        self.in_hand = False
+        self.played = False
+        self.scored = False
+        self.discarded = False
+    
+    def apply_enhancement(self, enhancement: CardEnhancement):
+        """
+        Apply an enhancement to the card
+        """
+        self.enhancement = enhancement
+    
+    def get_chip_bonus(self) -> int:
+        """
+        Calculate chip bonus based on enhancement
+        """
+        if self.enhancement == CardEnhancement.FOIL:
+            return 50
+        return 0
+    
+    def get_mult_add(self) -> float:
+        """
+        Calculate mult bonus based on enhancement
+        """
+        if self.enhancement == CardEnhancement.HOLO:
+            return 10
+        return 0
+
+    def get_mult_mult(self) -> float:
+        """Calculate mult multiplication bonus based on enhancement"""
+        if self.enhancement == CardEnhancement.POLY:
+            return 1.5
+        return 1.0
+    
+    def reset_state(self):
+        """
+        Reset card state for a new round
+        """
+        self.played_this_ante = False
+        self.in_hand = False
+        self.played = False
+        self.scored = False
+        self.discarded = False
+    
+    def __repr__(self):
+        """
+        String representation of the card
+        """
+        return f"{self.suit.name} {self.rank.name}"
 
         
 
