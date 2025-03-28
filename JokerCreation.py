@@ -1,6 +1,7 @@
-from Joker import Joker, JokerEffect
+from Joker import *
 from enum import Enum, auto
 from typing import List, Optional
+from Inventory import *
 from Enums import *
 import random
 
@@ -16,7 +17,7 @@ def create_joker(joker_name: str) -> Optional[Joker]:
     
     return joker_classes.get(joker_name, lambda: None)()
 
-class GreenJoker(Joker):
+class GreenJoker(Joker): #NEED to store global played vs discard functionality not just round
     def __init__(self):
         super().__init__("Green Joker", price=4, sell_value=2)
         
@@ -48,7 +49,7 @@ class DelayedGratificationJoker(Joker):
             effect.money = 2 * round_info.get('max_discards', 0)
         return effect
 
-class CleverJoker(Joker):
+class CleverJoker(Joker): #NEED to handle flush with a two pair in it
     def __init__(self):
         super().__init__("Clever", price=4, sell_value=2)
         
@@ -59,7 +60,7 @@ class CleverJoker(Joker):
             effect.chips = 80
         return effect
 
-class MadJoker(Joker):
+class MadJoker(Joker): #NEED to handle flush with a two pair in it
     def __init__(self):
         super().__init__("Mad", price=3, sell_value=1)
     
@@ -70,7 +71,7 @@ class MadJoker(Joker):
             effect.mult_add = 10
         return effect
     
-class WilyJoker(Joker):
+class WilyJoker(Joker): #NEED to handle flush with a three of a kind in it
     def __init__(self):
         super().__init__("Wily", price=3, sell_value=1)
 
@@ -163,3 +164,73 @@ class RocketJoker(Joker):
         # Earn $1 at end of round, payout increases by $2 when boss blind is defeated
         effect.money = 1 + (2 * self.boss_blind_defeated)
         return effect
+    
+class RedCardJoker(Joker):
+    def __init__(self):
+        super().__init__("Red Card", price=4, sell_value=2)
+    
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        skip_count = inventory.booster_skip
+        effect.mult_add  = 4 * skip_count
+        return effect
+    
+class BannerJoker(Joker):
+    def __init__(self):
+        super().__init__("Banner", price=4, sell_value=1)
+    
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        effect.chips = 30*discards
+        return effect
+    
+class TheDuoJoker(Joker): # NEED functionality to check if pair is in flush 
+    def __init__(self):
+        super().__init__("The Duo", price=7, sell_value=3)
+    
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        if round_info.get("hand_type") in ["pair", "two_pair", "full_house", "three_of_kind", "four_of_kind"]:
+            effect.mult_mult = 2
+        return effect
+
+class GluttonousJoker(Joker):
+    def __init__(self):
+        super().__init__("Gluttonous", price=4, sell_value=2)
+    
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        club_count = sum(1 for card in hand if card.suit == Suit.CLUBS and card.scored == True)
+        effect.mult_add = club_count * 3
+        return effect
+
+class FortuneTellerJoker(Joker):
+    def __init__(self):
+        super().__init__("Fortune Teller", price=4, sell_value=1)
+    
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        effect.mult_add = inventory.tarot_used
+        return effect
+
+class BusinessCardJoker(Joker):
+    def __init__(self):
+        super().__init__("BusinessCard", price=4, sell_value=1)
+    
+    def calculate_effect(self, hand, discards, deck, round_info):
+        rng = random.randint(0,1)
+        effect = JokerEffect()
+        if rng == 1:
+            effect.money = 2
+        
+        return effect
+    
+class BaseballJoker(Joker):
+    def __init__(self):
+        super().__init__("BaseballJoker", price=6, sell_value=3)
+
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        effect.mult_mult = 1.5 * inventory.uncommon_joker_count
+        return effect
+    
