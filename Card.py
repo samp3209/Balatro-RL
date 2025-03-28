@@ -56,6 +56,7 @@ class Card:
         self.played = False
         self.scored = False
         self.discarded = False
+        self.in_deck = True
     
     def __repr__(self):
         """

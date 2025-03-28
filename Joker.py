@@ -4,7 +4,8 @@ from typing import List, Optional
 
 class JokerEffect:
     def __init__(self):
-        self.mult = 0
+        self.mult_add = 0
+        self.mult_mult = 1
         self.chips = 0
         self.money = 0
         self.triggered_effects = []

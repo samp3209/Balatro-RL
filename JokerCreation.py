@@ -2,6 +2,7 @@ from Joker import Joker, JokerEffect
 from enum import Enum, auto
 from typing import List, Optional
 from Enums import *
+import random
 
 def create_joker(joker_name: str) -> Optional[Joker]:
     joker_classes = {
@@ -22,7 +23,7 @@ class GreenJoker(Joker):
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
         effect = JokerEffect()
         # +1 mult per hand played, -1 mult per discard
-        effect.mult = round_info.get('hands_played', 0) - discards
+        effect.mult_add = round_info.get('hands_played', 0) - discards
         return effect
     
 
@@ -54,8 +55,90 @@ class CleverJoker(Joker):
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
         effect = JokerEffect()
         # +80 Chips if played hand contains a two pair
-        if round_info.get('hand_type') == 'two_pair':
+        if round_info.get('hand_type') == 'two_pair' or round_info.get('hand_type') == 'full_house':
             effect.chips = 80
+        return effect
+
+class MadJoker(Joker):
+    def __init__(self):
+        super().__init__("Mad", price=3, sell_value=1)
+    
+    def calculate_effect(self, hand, discards, deck, round_info) -> JokerEffect:
+        effect = JokerEffect()
+        # +10 mult if played hand contains a two pair
+        if round_info.get('hand_type') == 'two_pair' or round_info.get('hand_type') == 'full_house':
+            effect.mult_add = 10
+        return effect
+    
+class WilyJoker(Joker):
+    def __init__(self):
+        super().__init__("Wily", price=3, sell_value=1)
+
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        # +100 Chips if played hand contains a three of a kind
+        if round_info.get('hand_type') == 'three_of_kind' or round_info.get('hand_type') == 'four_of_kind' or round_info.get('hand_type') == 'full_house':
+            effect.chips = 100
+        return effect
+    
+
+class CraftyJoker(Joker):
+    def __init__(self):
+        super().__init__("Crafty", price=3, sell_value=1)
+    
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        if round_info.get('hand_type') == 'flush':
+            effect.chips = 80
+        return effect
+
+class MisprintJoker(Joker):
+    def __init__(self):
+        super().__init__("Misprint", price=4, sell_value=1)
+    
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        effect.mult_add = random.randint(0, 23)
+        return effect
+    
+class WrathfulJoker(Joker):
+    def __init__(self):
+        super().__init__("Wrathful", price=4, sell_value=1)
+    
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        spade_count = sum(1 for card in hand if card.suit == Suit.SPADES and card.scored == True)
+        effect.mult_add = 3 * spade_count
+        return effect
+    
+class SmileyJoker(Joker):
+    def __init__(self):
+        super().__init__("Smiley", price=5, sell_value=2)
+
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        face_count = sum(1 for card in hand if card.rank in [Rank.JACK, Rank.QUEEN, Rank.King] and card.scored == True)
+        effect.mult_add = 5 * face_count
+        return effect
+
+class EvenSteven(Joker):
+    def __init__(self):
+        super().__init__("EvenSteven", price = 4, sell_value=2)
+    
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        even_count = sum(1 for card in hand if card.rank in [Rank.TEN, Rank.EIGHT, Rank.SIX, Rank.FOUR, Rank.TWO] and card.scored == True)
+        effect.mult_add = even_count * 4
+        return effect
+
+class BlueJoker(Joker):
+    def __init__(self):
+        super().__init__("Blue", price =4, sell_value=1)
+    
+    def calculate_effect(self, hand, discards, deck, round_info):
+        effect = JokerEffect()
+        deck_count = sum(1 for card in deck)
+        effect.chips = deck_count *2
         return effect
 
 class WalkieTalkieJoker(Joker):
@@ -65,9 +148,9 @@ class WalkieTalkieJoker(Joker):
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
         effect = JokerEffect()
         # Each played 10 or 4 gives +10 chips and +4 mult when scored
-        ten_four_count = sum(1 for card in hand if card.rank in [Rank.TEN, Rank.FOUR])
+        ten_four_count = sum(1 for card in hand if card.rank in [Rank.TEN, Rank.FOUR] and card.scored == True)
         effect.chips = 10 * ten_four_count
-        effect.mult = 4 * ten_four_count
+        effect.mult_add = 4 * ten_four_count
         return effect
 
 class RocketJoker(Joker):

@@ -1,5 +1,6 @@
 from JokerCreation import *
 from Card import *
+import pytest
 def GJtest():
     green_joker = create_joker("Green Joker")
     
@@ -18,8 +19,9 @@ def GJtest():
     )
     
     print(f"Green Joker effect - Mult: {effect.mult}, Chips: {effect.chips}, Money: {effect.money}")
+    assert(effect.mult == 1)
 
-GJtest() # should print 1 mult 
+GJtest()
 
 def test_walkie_talkie_joker():
     print("Testing Walkie Talkie Joker:")
@@ -43,6 +45,8 @@ def test_walkie_talkie_joker():
     effect2 = walkie_talkie.calculate_effect(hand2, 0, [], {'hand_type': 'two_pair'})
     print("Two 10s and one 4 - Chips:", effect2.chips, "Mult:", effect2.mult)
 
+test_walkie_talkie_joker()
+
 def test_rocket_joker():
     print("\nTesting Rocket Joker:")
     rocket = RocketJoker()
@@ -61,6 +65,8 @@ def test_rocket_joker():
     effect3 = rocket.calculate_effect([], 0, [], {})
     print("Three boss blinds defeated - Money:", effect3.money)
 
+test_rocket_joker()
+
 def test_clever_joker():
     print("\nTesting Clever Joker:")
     clever = CleverJoker()
@@ -73,6 +79,8 @@ def test_clever_joker():
     effect2 = clever.calculate_effect([], 0, [], {'hand_type': 'two_pair'})
     print("Two pair hand - Chips:", effect2.chips)
 
+test_clever_joker()
+
 def test_delayed_gratification_joker():
     print("\nTesting Delayed Gratification Joker:")
     delayed_grat = DelayedGratificationJoker()
@@ -84,3 +92,5 @@ def test_delayed_gratification_joker():
     # Scenario 2: No discards used
     effect2 = delayed_grat.calculate_effect([], 0, [], {'max_discards': 3})
     print("No discards used - Money:", effect2.money)
+
+test_delayed_gratification_joker()
