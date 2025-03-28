@@ -7,5 +7,4 @@ class hand(object):
         self.cards_in_hand = [] #list of cards in hand
         self.best_hand_in_hand = None #what is the best hand that can be made out of cards in hand
         self.current_score = 0 #what is our score
-        self.score_to_beat = 300 # what is the score we have to reach to beat the round
         self.played_hand_size = 0 # size of hand played

@@ -95,3 +95,47 @@ def test_delayed_gratification_joker():
 
 test_delayed_gratification_joker()
 
+def test_mad_joker():
+    mad = MadJoker()
+    hand1 = [
+        Card(Suit.HEARTS, Rank.JACK),
+        Card(Suit.DIAMONDS, Rank.QUEEN),
+        Card(Suit.CLUBS, Rank.KING)
+    ]
+    hand2 = [
+        Card(Suit.HEARTS, Rank.TEN),
+        Card(Suit.DIAMONDS, Rank.FOUR),
+        Card(Suit.CLUBS, Rank.TEN),
+        Card(Suit.CLUBS, Rank.FOUR)
+    ]
+    effect1 = mad.calculate_effect(hand1, 0, [], {'hand_type': 'high_card'})
+    effect2 = mad.calculate_effect(hand2, 0, [], {'hand_type': 'two_pair'})
+    effect3 = mad.calculate_effect([], 0,[], {'hand_type': 'full_house'})
+    assert(effect1.mult_add == 0 and effect2.mult_add == 10 and effect3.mult_add == 10)
+
+test_mad_joker()
+
+def test_Wily_joker():
+    wily = WilyJoker()
+    effect1 = wily.calculate_effect([], 0, [], {'hand_type': 'three_of_kind'})
+    effect2 = wily.calculate_effect([], 0, [], {'hand_type': 'full_house'})
+    effect3 = wily.calculate_effect([], 0, [], {'hand_type': 'four_of_kind'})
+    effect4 = wily.calculate_effect([], 0, [], {'hand_type': 'high_card'})
+    assert(effect1.chips == 100 and effect2.chips == 100 and effect3.chips == 100 and effect4.chips == 0)
+
+test_Wily_joker()
+
+def test_crafty():
+    crafty = CraftyJoker()
+    effect1 = crafty.calculate_effect([], 0, [], {'hand_type': 'flush'})
+    effect2 = crafty.calculate_effect([], 0, [], {'hand_type': 'high_card'})
+    assert(effect1.chips == 80 and effect2 == 0)
+
+test_crafty()
+
+def test_misprint():
+    misprint = MisprintJoker()
+    effect1 = misprint.calculate_effect([], 0, [], {'hand_type': 'three_of_kind'})
+    assert(0 <= effect1.mult_add <= 23)
+
+test_misprint()
