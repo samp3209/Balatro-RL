@@ -1,4 +1,7 @@
-from enum import Enum
+from enum import Enum, auto
+from typing import List, Optional
+
+
 
 class joker_chip_modifiers(Enum):
     base = 0
@@ -71,7 +74,26 @@ class card_shop_chance(Enum):
     holo = 2.8
     foil = 4.0
 
+class Suit(Enum):
+    HEARTS = auto()
+    DIAMONDS = auto()
+    CLUBS = auto()
+    SPADES = auto()
 
+class Rank(Enum):
+    TWO = 2
+    THREE = 3
+    FOUR = 4
+    FIVE = 5
+    SIX = 6
+    SEVEN = 7
+    EIGHT = 8
+    NINE = 9
+    TEN = 10
+    JACK = 10
+    QUEEN = 10
+    KING = 10
+    ACE = 11
 
 
 

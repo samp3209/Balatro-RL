@@ -1,12 +1,32 @@
-class Joker(object):
+from enum import Enum, auto
+from typing import List, Optional
+
+
+class JokerEffect:
     def __init__(self):
-        self.rarity = 'base' # 'base', 'foil' +50 chips, 'holo' +10 mult, 'poly' 1.5x mult, 'negative' -1 joker space
+        self.mult = 0
+        self.chips = 0
+        self.money = 0
+        self.triggered_effects = []
+
+
+class Joker(object):
+    def __init__(self, name: str, price: int, sell_value: int):
+        self.name = name
+        self.rarity = 'base'
+        self.price = price
+        self.sell_value = sell_value
         self.mult_effect = 0 
         self.chips_effect = 0
         self.played_hand_effect = 0
-        self.left_most = False #left most joker for the brainstorm joker
-        self.boss_blind_defeated = 0 #counts how many times this joker beat a boss blind for rocket joker
-        self.price = 0 #shop price
-        self.sell_value = 0 #shop selling value
-        self.retrigger = False #does the joker get retriggered
-        
+        self.left_most = False
+        self.boss_blind_defeated = 0
+        self.retrigger = False
+    
+    def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
+        """
+        Base method to be overridden by specific jokers
+        Calculate the joker's effect based on the current game state
+        """
+        return JokerEffect()
+
