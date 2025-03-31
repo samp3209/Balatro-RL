@@ -1,9 +1,9 @@
 from Joker import *
 from enum import Enum, auto
 from typing import List, Optional
-from Inventory import *
 from Enums import *
 import random
+from Inventory import *
 
 def create_joker(joker_name: str) -> Optional[Joker]:
     joker_classes = {
@@ -171,7 +171,7 @@ class RedCardJoker(Joker):
     
     def calculate_effect(self, hand, discards, deck, round_info):
         effect = JokerEffect()
-        skip_count = inventory.booster_skip
+        skip_count = Inventory.booster_skip
         effect.mult_add  = 4 * skip_count
         return effect
     
@@ -210,7 +210,7 @@ class FortuneTellerJoker(Joker):
     
     def calculate_effect(self, hand, discards, deck, round_info):
         effect = JokerEffect()
-        effect.mult_add = inventory.tarot_used
+        effect.mult_add = Inventory.tarot_used
         return effect
 
 class BusinessCardJoker(Joker):
@@ -231,6 +231,6 @@ class BaseballJoker(Joker):
 
     def calculate_effect(self, hand, discards, deck, round_info):
         effect = JokerEffect()
-        effect.mult_mult = 1.5 * inventory.uncommon_joker_count
+        effect.mult_mult = 1.5 * Inventory.uncommon_joker_count
         return effect
     

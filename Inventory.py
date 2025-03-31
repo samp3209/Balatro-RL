@@ -1,18 +1,253 @@
-class inventory(object):
-    def __init__(self):
-        self.jokers = [] #list of jokers
-        self.consumables = [] #max is 2
-        self.last_tarot = None #last played tarot card 
-        self.joker_sell_values = [] #list of joker sell values
-        self.pluto_lvl = 1 #default 1 mult x 5 chips, each increment increases pluto effect by 1+ mult 10+ chips
-        self.mercury_lvl = 1 #default 2 mult x 10 chips, each increase by 1 mult 15 chips
-        self.uranus_lvl = 1 #default 2 mutl x 20 chips, each increase by +1 mult +20 chips
-        self.venus_lvl = 1 #default 3 mult x 30 chips, each increase by +2 mult +20 chips
-        self.saturn_lvl = 1 #default 4 mult x 30 chips, each increase by +3 mult +30 chips
-        self.earth_lvl = 1 #default 4 mult x 40 chips, each increase by +2 mult +30 chips
-        self.mars_lvl = 1 #default 7 mult x 60 chips, each increase by +3 mult +30 chips
-        self.neptune_lvl = 1 #default 8 mult x 100 chips, each increase by +4 mult +40 chips
-        self.booster_skip = 0 #counts how many boosters we skipped
-        self.tarot_used = 0 #counts tarot cards used
-        self.uncommon_joker_count = 0
+from typing import List, Optional, Union
+from Card import *
+from Hand import *
+from Joker import *
+from JokerCreation import *
+from Planet import *
+from Shop import *
+from Tarot import *
+import random
 
+
+class Consumable:
+    """Wrapper class to store either a Tarot or Planet in the consumables list"""
+    def __init__(self, item: Union[Tarot, Planet]):
+        self.item = item
+        if isinstance(item, Tarot):
+            self.type = ConsumableType.TAROT
+        elif isinstance(item, Planet):
+            self.type = ConsumableType.PLANET
+        else:
+            raise ValueError("Consumable must be either a Tarot or Planet")
+        
+
+class Inventory:
+    def __init__(self):
+        # Core storage
+        self.jokers = []  # list of jokers
+        self.deck = [] # list of cards in the current deck
+        self.consumables = []  # max is 2, stores Consumable objects (wrappers for Tarots/Planets)
+        self.max_consumables = 2
+        
+        # Track last used cards
+        self.last_tarot = None  # last played tarot card
+        self.last_planet = None  # last played planet card
+        
+        # Stats and counters
+        self.joker_sell_values = []  # list of joker sell values
+        self.uncommon_joker_count = 0
+        self.booster_skip = 0  # counts how many boosters we skipped
+        self.tarot_used = 0  # counts tarot cards used
+        self.planet_used = 0  # counts planet cards used
+        
+        # Planet level trackers
+        self.planet_levels = {
+            PlanetType.PLUTO: 1,    # default 1 mult x 5 chips
+            PlanetType.MERCURY: 1,  # default 2 mult x 10 chips
+            PlanetType.URANUS: 1,   # default 2 mult x 20 chips
+            PlanetType.VENUS: 1,    # default 3 mult x 30 chips
+            PlanetType.SATURN: 1,   # default 4 mult x 30 chips
+            PlanetType.EARTH: 1,    # default 4 mult x 40 chips
+            PlanetType.MARS: 1,     # default 7 mult x 60 chips
+            PlanetType.NEPTUNE: 1   # default 8 mult x 100 chips
+        }
+
+    def add_joker(self, joker: Joker) -> bool:
+        """Add a joker to inventory. Returns True if successful."""
+        self.jokers.append(joker)
+        self.joker_sell_values.append(joker.sell_value)
+        if joker.rarity == "Uncommon":
+            self.uncommon_joker_count += 1
+        return True
+    
+    def remove_joker(self, joker_index: int) -> Optional[Joker]:
+        """Remove joker at given index and return it."""
+        if 0 <= joker_index < len(self.jokers):
+            joker = self.jokers.pop(joker_index)
+            # Update stats when removing
+            self.joker_sell_values.remove(joker.sell_value)
+            if joker.rarity == "Uncommon":
+                self.uncommon_joker_count -= 1
+            return joker
+        return None
+
+    def has_joker_space(self) -> bool:
+        """Check if there's space for a new joker."""
+        if len(self.jokers) == 5:
+            return False
+        return True 
+    
+    def add_consumable(self, item: Union[Tarot, Planet]) -> bool:
+        """Add a Tarot or Planet card to consumables. Returns True if successful."""
+        if len(self.consumables) >= self.max_consumables:
+            return False
+        
+        consumable = Consumable(item)
+        self.consumables.append(consumable)
+        return True
+    
+    def remove_consumable(self, index: int) -> Optional[Union[Tarot, Planet]]:
+        """Remove consumable at given index and return the item."""
+        if 0 <= index < len(self.consumables):
+            consumable = self.consumables.pop(index)
+            return consumable.item
+        return None
+    
+    def use_tarot(self, index: int, selected_cards, game_state: dict) -> Optional[dict]:
+        """Use a tarot card from consumables and return its effect."""
+        if 0 <= index < len(self.consumables):
+            consumable = self.consumables[index]
+            if consumable.type == ConsumableType.TAROT:
+                tarot = consumable.item
+                # Apply tarot effect
+                effect = tarot.apply_effect(selected_cards, self, game_state)
+                # Update last tarot and stats
+                self.last_tarot = tarot
+                self.tarot_used += 1
+                # Remove the used tarot
+                self.consumables.pop(index)
+                return effect
+        return None
+    
+    def use_planet(self, index: int, hand_type, game_state: dict) -> Optional[dict]:
+        """Use a planet card from consumables and return its effect."""
+        if 0 <= index < len(self.consumables):
+            consumable = self.consumables[index]
+            if consumable.type == ConsumableType.PLANET:
+                planet = consumable.item
+                # Apply planet effect
+                effect = planet.apply_effect(hand_type, game_state)
+                # Update last planet and stats
+                self.last_planet = planet
+                self.planet_used += 1
+                # Remove the used planet
+                self.consumables.pop(index)
+                
+                # Level up the planet type
+                planet_type = planet.planet_type
+                self.planet_levels[planet_type] += 1
+                
+                return effect
+        return None
+    
+    def get_consumable_tarot_indices(self) -> List[int]:
+        """Get indices of all tarot cards in consumables."""
+        return [i for i, consumable in enumerate(self.consumables) 
+                if consumable.type == ConsumableType.TAROT]
+    
+    def get_consumable_planet_indices(self) -> List[int]:
+        """Get indices of all planet cards in consumables."""
+        return [i for i, consumable in enumerate(self.consumables) 
+                if consumable.type == ConsumableType.PLANET]
+    
+    def get_available_space(self) -> int:
+        """Get number of available spaces in consumables."""
+        return max(0, self.max_consumables - len(self.consumables))
+    
+    # Planet level methods
+    def get_planet_level(self, planet_type: PlanetType) -> int:
+        """Get the current level of a specific planet type."""
+        return self.planet_levels.get(planet_type, 1)
+    
+    def get_planet_bonus(self, planet_type: PlanetType) -> tuple:
+        """Get the current bonus multiplier and chips for a planet type based on its level."""
+        level = self.planet_levels.get(planet_type, 1) - 1  # Subtract 1 to get bonus levels
+        
+        # Base bonuses per level for each planet
+        bonuses = {
+            PlanetType.PLUTO: (1, 10),     # +1 Mult, +10 chips per level
+            PlanetType.MERCURY: (1, 15),   # +1 Mult, +15 chips per level
+            PlanetType.URANUS: (1, 20),    # +1 Mult, +20 chips per level
+            PlanetType.VENUS: (2, 20),     # +2 Mult, +20 chips per level
+            PlanetType.SATURN: (3, 30),    # +3 Mult, +30 chips per level
+            PlanetType.EARTH: (2, 15),     # +2 Mult, +15 chips per level
+            PlanetType.MARS: (3, 30),      # +3 Mult, +30 chips per level
+            PlanetType.NEPTUNE: (4, 40)    # +4 Mult, +40 chips per level
+        }
+        
+        base_mult, base_chips = bonuses.get(planet_type, (0, 0))
+        return (base_mult * level, base_chips * level)
+    
+    def calculate_hand_value(self, hand_type, game_state: dict) -> tuple:
+        """
+        Calculate the total value of a hand including all planet level bonuses
+        Returns (total_mult, total_chips)
+        """
+        # Base values for each hand type
+        base_values = {
+            "HIGH_CARD": (1, 5),
+            "PAIR": (2, 10),
+            "TWO_PAIR": (2, 20),
+            "THREE_OF_A_KIND": (3, 30),
+            "STRAIGHT": (4, 30),
+            "FULL_HOUSE": (4, 40),
+            "FOUR_OF_A_KIND": (7, 60),
+            "STRAIGHT_FLUSH": (8, 100)
+        }
+        
+        # Get base values for the hand type
+        base_mult, base_chips = base_values.get(hand_type.name, (0, 0))
+        
+        # Initialize with base values
+        total_mult = base_mult
+        total_chips = base_chips
+        
+        # Map hand types to corresponding planet types
+        hand_to_planet = {
+            "HIGH_CARD": PlanetType.PLUTO,
+            "PAIR": PlanetType.MERCURY,
+            "TWO_PAIR": PlanetType.URANUS,
+            "THREE_OF_A_KIND": PlanetType.VENUS,
+            "STRAIGHT": PlanetType.SATURN,
+            "FULL_HOUSE": PlanetType.EARTH,
+            "FOUR_OF_A_KIND": PlanetType.MARS,
+            "STRAIGHT_FLUSH": PlanetType.NEPTUNE
+        }
+        
+        # Get the corresponding planet type for this hand
+        planet_type = hand_to_planet.get(hand_type.name)
+        
+        if planet_type:
+            # Add bonuses based on planet level
+            bonus_mult, bonus_chips = self.get_planet_bonus(planet_type)
+            total_mult += bonus_mult
+            total_chips += bonus_chips
+        
+        # Apply any global multipliers from game state
+        stake_multiplier = game_state.get('stake_multiplier', 1)
+        total_chips = total_chips * stake_multiplier
+        
+        return (total_mult, total_chips)
+    
+    def add_card_to_deck(self, card: Card) -> bool:
+        """Add a card to the deck. Returns True if successful."""
+        self.deck.append(card)
+        return True
+    
+
+    def remove_card_from_deck(self, card_index: int) -> Optional[Card]:
+        """Remove a card from the deck at the given index and return it."""
+        if 0 <= card_index < len(self.deck):
+            return self.deck.pop(card_index)
+        return None
+    
+    def shuffle_deck(self):
+        """Shuffle the current deck."""
+        random.shuffle(self.deck)
+
+    def get_deck_size(self) -> int:
+        """Return the number of cards in the deck."""
+        return len(self.deck)
+        
+    def is_deck_empty(self) -> bool:
+        """Check if the deck is empty."""
+        return len(self.deck) == 0
+    
+    def initialize_standard_deck(self):
+        """Initialize a standard 52-card deck."""
+        self.deck = []
+        suits = [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]
+        for suit in suits:
+            for rank in range(1, 14):
+                self.deck.append(Card(rank, suit))
+    
