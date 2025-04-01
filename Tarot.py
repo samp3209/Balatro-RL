@@ -86,32 +86,24 @@ class Tarot:
         """
         effect = TarotEffect()
         
-        # Validate selection count
         if len(selected_cards) < self.selected_cards_required:
             effect.message = f"This tarot requires {self.selected_cards_required} selected cards."
             return effect
         
-        # Apply effects based on tarot type
         if self.tarot_type == TarotType.THE_FOOL:
-            # Implementation for The Fool
             last_tarot = game_state.get('last_tarot_used')
             last_planet = game_state.get('last_planet_used')
             
             if last_tarot:
-                # Logic to create a copy of the last tarot
                 effect.cards_created.append(last_tarot)
             
             if last_planet:
-                # Logic to create a copy of the last planet
                 effect.cards_created.append(last_planet)
                 
             effect.message = "Created copies of the last Tarot and Planet cards."
             
         elif self.tarot_type == TarotType.THE_MAGICIAN:
-            # Turn two selected cards into lucky cards
             for card in selected_cards[:2]:
-                # Implementation for making a card "lucky"
-                # This would set some property on the card
                 effect.cards_enhanced.append(card)
             
             effect.message = "Turned selected cards into lucky cards."
@@ -129,7 +121,6 @@ class Tarot:
             effect.message = f"Generated {num_planets} random planet cards."
             
         elif self.tarot_type == TarotType.THE_HERMIT:
-            # Double money up to a max of 20
             current_money = game_state.get('money', 0)
             money_gain = min(current_money, 20)
             effect.money_gained = money_gain
@@ -146,7 +137,6 @@ class Tarot:
 
 
         elif self.tarot_type == TarotType.THE_EMPRESS:
-            # Selects two cards into mult cards (+4 mult)
             for card in selected_cards[:2]:
                 card.enhancement = CardEnhancement.MULT
                 effect.cards_enhanced.append(card)
@@ -154,7 +144,6 @@ class Tarot:
             effect.message = "Enhanced selected cards with +4 mult."
 
         elif self.tarot_type == TarotType.THE_EMPEROR:
-            # Creates up to 2 random tarot cards
             available_space = Inventory.get_available_space()
             num_tarots = min(2, available_space)
             
@@ -165,7 +154,6 @@ class Tarot:
             effect.message = f"Created {num_tarots} random tarot cards."
 
         elif self.tarot_type == TarotType.THE_HIEROPHANT:
-            # Select two cards into bonus cards (+30 chips)
             for card in selected_cards[:2]:
                 card.enhancement = CardEnhancement.BONUS
                 effect.cards_enhanced.append(card)
@@ -173,7 +161,6 @@ class Tarot:
             effect.message = "Enhanced selected cards with +30 chips."
 
         elif self.tarot_type == TarotType.THE_LOVERS:
-            # Enhances 1 card into a wild card (all suits at the same time)
             card = selected_cards[0]
             card.enhancement = CardEnhancement.WILD
             effect.cards_enhanced.append(card)
@@ -182,7 +169,6 @@ class Tarot:
 
 
         elif self.tarot_type == TarotType.THE_CHARIOT:
-            # Enhances 1 card into a steel card (x1.5 mult if held in hand)
             card = selected_cards[0]
             card.enhancement = CardEnhancement.STEEL
             effect.cards_enhanced.append(card)
@@ -191,7 +177,6 @@ class Tarot:
 
 
         elif self.tarot_type == TarotType.JUSTICE:
-            # Enhances 1 card into a glass card (x2 mult, 1/4 chance to be destroyed after hand)
             card = selected_cards[0]
             card.enhancement = CardEnhancement.GLASS
             effect.cards_enhanced.append(card)
@@ -200,7 +185,6 @@ class Tarot:
 
 
         elif self.tarot_type == TarotType.THE_HERMIT:
-            # Doubles money (max 20)
             current_money = game_state.get('money', 0)
             money_gain = min(current_money, 20)
             effect.money_gained = money_gain
@@ -209,17 +193,16 @@ class Tarot:
 
 
         elif self.tarot_type == TarotType.WHEEL_OF_FORTUNE:
-            # 20% chance to get foil, 10% to get holo, 5% to get polychrome
             card = selected_cards[0]
             roll = random.random()
             
-            if roll < 0.05:  # 5% for polychrome
+            if roll < 0.05:
                 card.enhancement = CardEnhancement.POLY
                 effect.message = "Card enhanced to polychrome (x1.5 mult)."
-            elif roll < 0.15:  # 10% for holo
+            elif roll < 0.15:
                 card.enhancement = CardEnhancement.HOLO
                 effect.message = "Card enhanced to holographic (+10 mult)."
-            elif roll < 0.35:  # 20% for foil
+            elif roll < 0.35:
                 card.enhancement = CardEnhancement.FOIL
                 effect.message = "Card enhanced to foil (+50 chips)."
             else:
@@ -228,20 +211,18 @@ class Tarot:
             effect.cards_enhanced.append(card)
 
         elif self.tarot_type == TarotType.STRENGTH:
-            # Increases the rank of two selected cards by 1. (ace wraps around to 2)
             for card in selected_cards[:2]:
                 if hasattr(card, 'rank'):
-                    if card.rank.value == 1:  # Ace
-                        card.rank = 2  # Set to 2
+                    if card.rank.value == 1:
+                        card.rank = 2
                     else:
-                        card.rank = min(card.rank.value + 1, 13)  # Max is King (13)
+                        card.rank = min(card.rank.value + 1, 13)
                     
                 effect.cards_enhanced.append(card)
             
             effect.message = "Increased rank of selected cards by 1."
 
         elif self.tarot_type == TarotType.THE_HANGED_MAN:
-            # Deletes 2 selected cards
             for card in selected_cards[:2]:
                 effect.cards_deleted.append(card)
             
@@ -249,12 +230,10 @@ class Tarot:
 
 
         elif self.tarot_type == TarotType.DEATH:
-            # Converts the left selected card into the right
             if len(selected_cards) >= 2:
                 left_card = selected_cards[0]
                 right_card = selected_cards[1]
                 
-                # Copy properties from right to left
                 left_card.suit = right_card.suit
                 left_card.rank = right_card.rank
                 left_card.enhancement = right_card.enhancement
@@ -265,14 +244,12 @@ class Tarot:
                 effect.message = "Need two cards to perform conversion."
 
         elif self.tarot_type == TarotType.TEMPERANCE:
-            # Adds the total sell amount of jokers in inventory
             total_sell_value = sum(joker.sell_value for joker in Inventory.jokers)
             effect.money_gained = total_sell_value
             
             effect.message = f"Added ${total_sell_value} from joker sell values."
 
         elif self.tarot_type == TarotType.THE_DEVIL:
-            # Enhances 1 selected card into a gold card (+3 money if held in hand at end of round)
             card = selected_cards[0]
             card.enhancement = CardEnhancement.GOLD
             effect.cards_enhanced.append(card)
@@ -280,7 +257,6 @@ class Tarot:
             effect.message = "Enhanced selected card to gold (+3 money if held)."
 
         elif self.tarot_type == TarotType.THE_TOWER:
-            # Enhances 1 selected card into a stone card (+50 chips no rank or suit)
             card = selected_cards[0]
             card.enhancement = CardEnhancement.STONE
             effect.cards_enhanced.append(card)
@@ -288,7 +264,6 @@ class Tarot:
             effect.message = "Enhanced selected card to stone (+50 chips, no rank/suit)."
 
         elif self.tarot_type == TarotType.THE_STAR:
-            # Converts 3 selected cards to diamond
             for card in selected_cards[:3]:
                 card.suit = Suit.DIAMOND
                 effect.cards_enhanced.append(card)
@@ -296,7 +271,6 @@ class Tarot:
             effect.message = "Converted selected cards to diamonds."
 
         elif self.tarot_type == TarotType.THE_STAR:
-            # Converts 3 selected cards to diamond
             for card in selected_cards[:3]:
                 card.suit = Suit.DIAMOND
                 effect.cards_enhanced.append(card)
@@ -304,7 +278,6 @@ class Tarot:
             effect.message = "Converted selected cards to diamonds."
 
         elif self.tarot_type == TarotType.THE_WORLD:
-            # Converts 3 selected cards to spades
             for card in selected_cards[:3]:
                 card.suit = Suit.SPADE
                 effect.cards_enhanced.append(card)
@@ -324,8 +297,56 @@ def create_random_tarot() -> Tarot:
     return create_tarot(random_type)
 
 def create_random_planet():
-    # Your implementation to create a random planet
     planet_types = list(PlanetType)
     random_type = random.choice(planet_types)
     return create_planet(random_type)
 
+def create_tarot_by_name(name: str) -> Tarot:
+    """
+    Create a Tarot card object by name
+    
+    Args:
+        name: The name of the tarot card (e.g., "Hierophant", "Moon", "Sun")
+        
+    Returns:
+        A Tarot card object with appropriate properties
+    """
+    tarot_name = name.lower().strip()
+    
+    tarot_data = {
+        "fool": {"effect": "Upgrade a random card", "price": 3, "sell_value": 1},
+        "magician": {"effect": "Transform a card", "price": 3, "sell_value": 1},
+        "high priestess": {"effect": "Create a copy of a card", "price": 3, "sell_value": 1},
+        "empress": {"effect": "Add 3 random cards to your deck", "price": 3, "sell_value": 1},
+        "emperor": {"effect": "Create a face card", "price": 3, "sell_value": 1},
+        "hierophant": {"effect": "Give a card an enhancement", "price": 3, "sell_value": 1},
+        "lovers": {"effect": "Combine 2 cards", "price": 4, "sell_value": 2},
+        "chariot": {"effect": "Add a Joker", "price": 3, "sell_value": 1},
+        "justice": {"effect": "Balance your Jokers", "price": 4, "sell_value": 2},
+        "hermit": {"effect": "Remove cards from your deck", "price": 2, "sell_value": 1},
+        "wheel of fortune": {"effect": "Random tarot effect", "price": 4, "sell_value": 2},
+        "strength": {"effect": "Double a card's value", "price": 4, "sell_value": 2},
+        "hanged man": {"effect": "Convert card to another suit", "price": 3, "sell_value": 1},
+        "death": {"effect": "Destroy a card, get a Joker", "price": 5, "sell_value": 2},
+        "temperance": {"effect": "Make a card Gold", "price": 3, "sell_value": 1},
+        "devil": {"effect": "Make a card negative", "price": 3, "sell_value": 1},
+        "tower": {"effect": "Destroy a card", "price": 2, "sell_value": 1},
+        "star": {"effect": "Make a card Stellar", "price": 3, "sell_value": 1},
+        "moon": {"effect": "Create a planet card", "price": 3, "sell_value": 1},
+        "sun": {"effect": "Make a card polychromatic", "price": 3, "sell_value": 1},
+        "judgement": {"effect": "Resurrect a destroyed card", "price": 5, "sell_value": 2},
+        "world": {"effect": "Make a card wild", "price": 3, "sell_value": 1}
+    }
+    
+    effect = "Unknown effect"
+    price = 3
+    sell_value = 1
+    
+    if tarot_name in tarot_data:
+        effect = tarot_data[tarot_name]["effect"]
+        price = tarot_data[tarot_name]["price"]
+        sell_value = tarot_data[tarot_name]["sell_value"]
+    
+    formatted_name = " ".join(word.capitalize() for word in tarot_name.split())
+    
+    return Tarot(formatted_name, effect, price, sell_value)

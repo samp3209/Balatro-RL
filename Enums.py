@@ -37,6 +37,13 @@ class PlanetType(Enum):
     NEPTUNE = auto()
     PLUTO = auto()
 
+class ShopItemType(Enum):
+    JOKER = auto()
+    TAROT = auto()
+    PLANET = auto()
+    BOOSTER = auto()
+    VOUCHER = auto()
+
 class joker_shop_chance(Enum): 
     negative = 0.3 #percent
     poly = 0.3
@@ -98,3 +105,16 @@ class TarotType(Enum):
     THE_SUN = auto()
     JUDGEMENT = auto()
     THE_WORLD = auto()
+
+
+class PackType(Enum):
+    STANDARD = "Standard Pack"
+    BUFFOON = "Buffoon Pack"
+    CELESTIAL = "Celestial Pack"
+    ARCANA = "Arcana Pack"
+    JUMBO_STANDARD = "Jumbo Standard Pack"
+    JUMBO_BUFFOON = "Jumbo Buffoon Pack"
+    JUMBO_CELESTIAL = "Jumbo Celestial Pack"
+    JUMBO_ARCANA = "Jumbo Arcana Pack"
+    MEGA_CELESTIAL = "Mega Celestial Pack"
+    MEGA_ARCANA = "Mega Arcana Pack"

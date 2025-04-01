@@ -18,8 +18,8 @@ class Planet:
         self.planet_type = planet_type
         self.name = self._get_name()
         self.description = self._get_description()
-        self.price = 5  # Base price for planets
-        self.sell_value = 2
+        self.price = 3
+        self.sell_value = 1
         
     def _get_name(self) -> str:
         """Convert enum to readable name"""
@@ -95,3 +95,42 @@ def create_random_planet() -> Planet:
     planet_types = list(PlanetType)
     random_type = random.choice(planet_types)
     return create_planet(random_type)
+
+
+def create_planet_by_name(name: str) -> Planet:
+    """
+    Create a Planet card object by name
+    
+    Args:
+        name: The name of the planet (e.g., "Mars", "Venus", "Jupiter")
+        
+    Returns:
+        A Planet card object with appropriate properties
+    """
+    planet_name = name.lower().strip()
+    
+    planet_data = {
+        "mercury": {"effect": "Discard and redraw your hand", "price": 3, "sell_value": 1},
+        "venus": {"effect": "Improve your next draw", "price": 3, "sell_value": 1},
+        "earth": {"effect": "Gain an extra hand this round", "price": 3, "sell_value": 1},
+        "mars": {"effect": "Increase stake multiplier", "price": 3, "sell_value": 1},
+        "jupiter": {"effect": "Gain extra chips", "price": 3, "sell_value": 1},
+        "saturn": {"effect": "Add a Celestial card to your hand", "price": 3, "sell_value": 1},
+        "uranus": {"effect": "Reverse the blinds order", "price": 3, "sell_value": 1},
+        "neptune": {"effect": "Play with different poker hands", "price": 3, "sell_value": 1},
+        "pluto": {"effect": "Force a specific poker hand", "price": 3, "sell_value": 1},
+        "black hole": {"effect": "Destroy a card, increase multiplier", "price": 5, "sell_value": 2}
+    }
+    
+    effect = "Unknown effect"
+    price = 3
+    sell_value = 1
+    
+    if planet_name in planet_data:
+        effect = planet_data[planet_name]["effect"]
+        price = planet_data[planet_name]["price"]
+        sell_value = planet_data[planet_name]["sell_value"]
+    
+    formatted_name = " ".join(word.capitalize() for word in planet_name.split())
+    
+    return Planet(formatted_name, effect, price, sell_value)
