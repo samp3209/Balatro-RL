@@ -1,16 +1,11 @@
 from Enums import *
 class Card:
     def __init__(self, suit: Suit, rank: Rank):
-        # Suit information
         self.suit = suit
-        
-        # Rank information
         self.rank = rank
         
-        # Enhancements
         self.enhancement = CardEnhancement.NONE
         
-        # Card state
         self.face = rank.value >= Rank.JACK.value and rank.value < Rank.ACE.value
         self.played_this_ante = False
         self.in_deck = True

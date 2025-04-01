@@ -4,8 +4,8 @@ from Hand import *
 from Joker import *
 from JokerCreation import *
 from Planet import *
-from Shop import *
 from Tarot import *
+from Enums import *  # Make sure ConsumableType is defined here
 import random
 
 
@@ -39,6 +39,7 @@ class Inventory:
         self.booster_skip = 0  # counts how many boosters we skipped
         self.tarot_used = 0  # counts tarot cards used
         self.planet_used = 0  # counts planet cards used
+        self.money = 0  # add money attribute to track player's funds
         
         # Planet level trackers
         self.planet_levels = {
@@ -250,4 +251,3 @@ class Inventory:
         for suit in suits:
             for rank in range(1, 14):
                 self.deck.append(Card(rank, suit))
-    

@@ -80,7 +80,7 @@ class Tarot:
         }
         return descriptions.get(self.tarot_type, "Unknown effect")
     
-    def apply_effect(self, selected_cards: List[Card], Inventory: Inventory, game_state: dict) -> TarotEffect:
+    def apply_effect(self, selected_cards: List[Card], Inventory, game_state: dict) -> TarotEffect:
         """
         Apply the tarot effect based on type and return the result
         """
@@ -109,14 +109,11 @@ class Tarot:
             effect.message = "Turned selected cards into lucky cards."
             
         elif self.tarot_type == TarotType.THE_HIGH_PRIESTESS:
-            # Generate random planet cards
             available_space = Inventory.get_available_space()
             num_planets = min(2, available_space)
             
-            # Logic to create planet cards would go here
             for _ in range(num_planets):
-                # Create planet card
-                pass
+                create_random_planet()
                 
             effect.message = f"Generated {num_planets} random planet cards."
             

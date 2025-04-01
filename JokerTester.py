@@ -4,7 +4,6 @@ import pytest
 def GJtest():
     green_joker = create_joker("Green Joker")
     
-    # Simulate a round
     round_info = {
         'hands_played': 3,
         'discards': 2,

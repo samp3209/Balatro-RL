@@ -2,11 +2,11 @@ from enum import Enum, auto
 from typing import List, Optional, Union, Tuple, Dict, Any
 import random
 from Card import *
-from Inventory import *
 from JokerCreation import *
+from Joker import *
 from Tarot import *
-from Planet import *
 from Enums import *
+from Planet import *
 
 
 class ShopItem:
@@ -14,7 +14,6 @@ class ShopItem:
         self.item_type = item_type
         self.item = item
         
-        # Use item's price if not explicitly provided
         if price is None and hasattr(item, 'price'):
             self.price = item.price
         else:
@@ -37,34 +36,24 @@ class ShopItem:
             return ""
 
 
-
 class Shop:
     def __init__(self):
-        # Shop items
         self.items = [None, None, None, None]  # Two main items and two pack/booster items
-        self.reroll_cost = 1  # Base cost to reroll the shop
-        self.reroll_count = 0  # Track number of rerolls
-        
-        # Discount tracking
         self.discount = 0
         self.has_voucher = False
-        
-        # Initialize the shop
         self.restock()
         
     def restock(self):
         """Restock all empty shop slots"""
-        # Fill main item slots
         for i in range(2):
             if self.items[i] is None:
                 self.items[i] = self._generate_random_item()
                 
-        # Fill booster/pack slots
         for i in range(2, 4):
             if self.items[i] is None:
                 self.items[i] = self._generate_random_booster()
 
-    def buy_item(self, slot: int, inventory: Inventory) -> bool:
+    def buy_item(self, slot: int, inventory) -> bool:
         """
         Buy an item from the shop
         Returns True if purchase was successful
@@ -75,19 +64,10 @@ class Shop:
         shop_item = self.items[slot]
         final_price = max(0, shop_item.price - self.discount)
         
-        # Check if player can afford it
         if inventory.money < final_price:
             return False
             
-        # Process the purchase
-        inventory.money -= final_price
-        
-        # Apply discount voucher if used
-        if self.discount > 0:
-            self.discount = 0
-            self.has_voucher = False
-        
-        # Add item to inventory based on type
+        inventory.money -= final_price 
         item_added = False
         
         if shop_item.item_type == ShopItemType.JOKER:
@@ -106,24 +86,21 @@ class Shop:
                 item_added = True
                 
         elif shop_item.item_type == ShopItemType.BOOSTER:
-            # Process booster pack
             self._process_booster(shop_item.item, inventory)
             item_added = True
             
         elif shop_item.item_type == ShopItemType.VOUCHER:
-            # Apply voucher effect
-            self.discount = shop_item.item  # item contains discount amount
+            self.discount = shop_item.item 
             self.has_voucher = True
             item_added = True
         
-        # If purchase successful, remove item from shop
         if item_added:
             self.items[slot] = None
             return True
             
         return False
     
-    def sell_item(self, item_type: str, item_index: int, inventory: Inventory) -> int:
+    def sell_item(self, item_type: str, item_index: int, inventory) -> int:
         """
         Sell an item from the inventory
         Returns the amount of money received
@@ -140,35 +117,13 @@ class Shop:
             if consumable:
                 sell_value = consumable.sell_value
                 
-        elif item_type == "card" and 0 <= item_index < len(inventory.deck):
-            card = inventory.remove_card_from_deck(item_index)
-            if card:
-                # Base sell value for cards
-                sell_value = 1
-                
-                # Enhcements add value
-                if hasattr(card, 'enhancement') and card.enhancement:
-                    enhancement_values = {
-                        CardEnhancement.FOIL: 2,
-                        CardEnhancement.HOLO: 3,
-                        CardEnhancement.POLY: 5,
-                        CardEnhancement.GOLD: 3,
-                        CardEnhancement.STEEL: 2,
-                        CardEnhancement.GLASS: 4,
-                        CardEnhancement.STONE: 3,
-                        CardEnhancement.WILD: 4,
-                        CardEnhancement.MULT: 3,
-                        CardEnhancement.BONUS: 3
-                    }
-                    sell_value += enhancement_values.get(card.enhancement, 0)
         
-        # Add sell value to inventory money
         if sell_value > 0:
             inventory.money += sell_value
             
         return sell_value
     
-    def skip_booster(self, slot: int, inventory: Inventory) -> bool:
+    def skip_booster(self, slot: int, inventory) -> bool:
         """
         Skip a booster pack and increment the booster_skip counter
         Returns True if successful
@@ -195,7 +150,6 @@ class Shop:
         )[0]
         
         if item_type == ShopItemType.JOKER:
-            # Generate a random joker
             joker_names = [
                 "Green Joker", "Mr. Bones", "Delayed Gratification", 
                 "Clever", "Mad", "Wily", "Crafty", "Misprint",
@@ -209,27 +163,24 @@ class Shop:
             return ShopItem(ShopItemType.JOKER, joker)
             
         elif item_type == ShopItemType.TAROT:
-            # Generate a random tarot
             tarot = create_random_tarot()
             return ShopItem(ShopItemType.TAROT, tarot)
             
         elif item_type == ShopItemType.PLANET:
-            # Generate a random planet
             planet = create_random_planet()
             return ShopItem(ShopItemType.PLANET, planet)
             
         elif item_type == ShopItemType.VOUCHER:
-            # Generate a discount voucher
-            discount_amount = random.choice([1, 2, 3])
-            return ShopItem(ShopItemType.VOUCHER, discount_amount, price=2)
+            voucher_value = random.choice([1, 2, 3])
+            return ShopItem(ShopItemType.VOUCHER, voucher_value, price=voucher_value+1)
     
     def _generate_random_booster(self) -> ShopItem:
         """Generate a random booster pack"""
         booster_types = [
-            "Standard Pack",  # Adds 5 random cards
-            "Enhanced Pack",  # Adds 3 enhanced cards
-            "Rare Pack",      # Adds 3 face cards
-            "Suited Pack"     # Adds 5 cards of the same suit
+            "Standard Pack",
+            "Enhanced Pack",
+            "Rare Pack",
+            "Suited Pack"
         ]
         
         booster_type = random.choice(booster_types)
@@ -242,10 +193,9 @@ class Shop:
         
         return ShopItem(ShopItemType.BOOSTER, booster_type, price=price)
     
-    def _process_booster(self, booster_type: str, inventory: Inventory):
+    def _process_booster(self, booster_type: str, inventory):
         """Process the booster pack and add cards to inventory"""
         if booster_type == "Standard Pack":
-            # Add 5 random cards
             for _ in range(5):
                 suit = random.choice(list(Suit))
                 rank = random.randint(1, 13)
@@ -505,22 +455,18 @@ class AnteShops:
         
         for item_data in shop_data:
             if item_data["item_type"] == ShopItemType.JOKER:
-                # Create joker
                 joker = create_joker(item_data["name"])
                 shop_items.append(ShopItem(ShopItemType.JOKER, joker, item_data["price"]))
                 
             elif item_data["item_type"] == ShopItemType.TAROT:
-                # Create tarot card
                 tarot = create_tarot_by_name(item_data["name"])
                 shop_items.append(ShopItem(ShopItemType.TAROT, tarot, item_data["price"]))
                 
             elif item_data["item_type"] == ShopItemType.PLANET:
-                # Create planet card
                 planet = create_planet_by_name(item_data["name"])
                 shop_items.append(ShopItem(ShopItemType.PLANET, planet, item_data["price"]))
                 
             elif item_data["item_type"] == ShopItemType.BOOSTER:
-                # Create booster pack
                 booster_name = item_data["pack_type"].value
                 shop_items.append(
                     ShopItem(
