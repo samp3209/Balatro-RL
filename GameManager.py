@@ -26,32 +26,28 @@ class GameManager:
         
         # Counters and limits
         self.max_hand_size = 8
-        self.max_discards = 4
+        self.max_hands_per_round = 4
+        self.max_discards_per_round = 4
         self.discards_used = 0
         self.hands_played = 0
         self.current_score = 0
         self.current_ante_beaten = False
+        self.game_over = False
         
     def start_new_game(self):
         """Start a new game with a fresh deck and initial ante"""
         self.game.initialize_deck()
         self.deal_new_hand()
+        self.game_over = False
         
     def deal_new_hand(self):
         """Deal a new hand of cards from the deck"""
         # Clear any existing cards
         self.current_hand = []
         self.played_cards = []
-        self.discarded_cards = []
         
         # Deal new cards
         self.current_hand = self.game.deal_hand(self.max_hand_size)
-        
-        # Reset counters
-        self.discards_used = 0
-        self.hands_played = 0
-        self.current_score = 0
-        self.current_ante_beaten = False
         
         # Reset hand result
         self.hand_result = None
@@ -74,8 +70,8 @@ class GameManager:
         if len(self.played_cards) > 0:
             return (False, "Cards have already been played this hand")
             
-        if self.hands_played >= 1:
-            return (False, "Already played maximum number of hands")
+        if self.hands_played >= self.max_hands_per_round:
+            return (False, "Already played maximum number of hands for this round")
             
         # Get the selected cards
         cards_to_play = []
@@ -109,17 +105,20 @@ class GameManager:
             'contained_hands': contained_hands,
             'hands_played': self.game.hands_played,
             'inventory': self.game.inventory,
-            'max_discards': self.max_discards,
+            'max_discards': self.max_discards_per_round,
             'face_cards_discarded_count': self.game.face_cards_discarded_count
         }
         
         # Calculate score with joker effects
-        total_mult, total_chips, money_gained = self.game.apply_joker_effects(
+        total_mult, chips, money_gained = self.game.apply_joker_effects(
             self.played_cards, hand_type, contained_hands
         )
         
+        # Calculate final score by multiplying chips by multiplier
+        final_score = int(chips * total_mult)
+        
         # Update score and counters
-        self.current_score += total_chips
+        self.current_score += final_score
         self.game.inventory.money += money_gained
         self.hands_played += 1
         self.game.hands_played += 1
@@ -127,16 +126,24 @@ class GameManager:
         # Check if ante is beaten
         if self.current_score >= self.game.current_blind:
             self.current_ante_beaten = True
+            message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult})"
+            return (True, message)
         
-        # Get message about the play
-        message = f"Played {hand_type.name} for {total_chips} chips (x{total_mult} mult)"
+        # If we've played all hands and still haven't beaten the ante
+        if self.hands_played >= self.max_hands_per_round and not self.current_ante_beaten:
+            # Check for Mr. Bones joker to possibly save the round
+            has_mr_bones = any(joker.name == "Mr. Bones" for joker in self.game.inventory.jokers)
+            if has_mr_bones and self.current_score >= (self.game.current_blind * 0.25):
+                self.current_ante_beaten = True
+                message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult}) - Mr. Bones saved you!"
+            else:
+                self.game_over = True
+                message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult}) - GAME OVER: Failed to beat the ante"
+            return (True, message)
         
-        # If there are cards remaining in hand and we haven't beaten the ante,
-        # deal a new hand for the next round
-        if self.hands_played >= 1 and not self.current_ante_beaten:
-            # Deal a new hand for the next round
-            self.reset_hand_state()
-            message += " - Dealing a new hand."
+        # Deal new hand if we still have hands left to play
+        message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult})"
+        self.deal_new_hand()
         
         return (True, message)
 
@@ -172,8 +179,8 @@ class GameManager:
         if not card_indices:
             return (False, "No cards selected to discard")
             
-        if self.discards_used >= self.max_discards:
-            return (False, "Maximum discards already used")
+        if self.discards_used >= self.max_discards_per_round:
+            return (False, "Maximum discards already used for this round")
             
         # Get the selected cards
         cards_to_discard = []
@@ -272,39 +279,39 @@ class GameManager:
         """
         if not self.current_ante_beaten:
             return False
-            
-        self.game.current_ante += 1
         
-        blind_progression = {
-            # Ante 1
-            (1, 1): 300,   # Small blind
-            (1, 2): 450,   # Medium blind 
-            (1, 3): 600,   # Boss blind
-            # Ante 2
-            (2, 1): 800,   # Small blind
-            (2, 2): 1200,  # Medium blind
-            (2, 3): 1600,  # Boss blind
-            # Ante 3
-            (3, 1): 2000,  # Small blind
-            (3, 2): 3000,  # Medium blind
-            (3, 3): 4000   # Boss blind
-        }
-        
-        # If we've beaten all 3 blinds in an ante, move to the next ante's first blind
+        # Move to next ante or blind within the current ante
         current_blind_in_ante = (self.game.current_ante % 3)
         if current_blind_in_ante == 0:
             current_blind_in_ante = 3
-            
-        # Get the blind value from the progression
-        self.game.current_blind = blind_progression.get(
-            (self.game.current_ante // 3 + 1, current_blind_in_ante), 
-            300  # Default if not found
-        )
+        
+        if current_blind_in_ante < 3:
+            # Move to the next blind within the current ante
+            self.game.current_ante += 1
+        else:
+            # Move to the first blind of the next ante
+            self.game.current_ante += 1
+        
+        # Set the new blind based on ante progression
+        blind_progression = {
+            # Ante 1
+            1: 300,   # Small blind
+            2: 450,   # Medium blind 
+            3: 600,   # Boss blind
+            # Ante 2
+            4: 800,   # Small blind
+            5: 1200,  # Medium blind
+            6: 1600,  # Boss blind
+            # Ante 3
+            7: 2000,  # Small blind
+            8: 3000,  # Medium blind
+            9: 4000,  # Boss blind
+        }
+        
+        self.game.current_blind = blind_progression.get(self.game.current_ante, 5000)
         
         # Reset for the new ante
-        self.game.reset_for_new_round()
-        self.deal_new_hand()
-        self.current_ante_beaten = False
+        self.reset_for_new_round()
         
         return True
     
@@ -403,3 +410,26 @@ class GameManager:
             message += f" Ante beaten! ({self.current_score}/{self.game.current_blind})"
             
         return (True, message)
+    
+    def reset_for_new_round(self):
+        """Reset the game state for a new round (after playing max hands or beating the ante)"""
+        self.discards_used = 0
+        self.hands_played = 0
+        self.current_score = 0
+        self.current_ante_beaten = False
+        
+        self.game.inventory.reset_deck(
+            played_cards=self.played_cards,
+            discarded_cards=self.discarded_cards,
+            hand_cards=self.current_hand
+        )
+        
+        self.played_cards = []
+        self.discarded_cards = []
+        self.current_hand = []
+        
+        self.deal_new_hand()
+        
+        for joker in self.game.inventory.jokers:
+            if hasattr(joker, 'reset'):
+                joker.reset()

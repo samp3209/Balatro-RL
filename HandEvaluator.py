@@ -23,7 +23,6 @@ class HandEvaluator:
     and tracks which cards are part of each pattern
     """
     
-    @staticmethod
     def analyze_hand(cards: List[Card]) -> Tuple[HandType, Dict[HandType, List[HandPattern]]]:
         """
         Analyze a hand to find all patterns within it
@@ -45,6 +44,7 @@ class HandEvaluator:
             HandType.TWO_PAIR: [],
             HandType.THREE_OF_A_KIND: [],
             HandType.STRAIGHT: [],
+            HandType.FLUSH: [],  # Added FLUSH type
             HandType.FULL_HOUSE: [],
             HandType.FOUR_OF_A_KIND: [],
             HandType.STRAIGHT_FLUSH: []
@@ -56,7 +56,7 @@ class HandEvaluator:
         HandEvaluator._find_three_of_a_kinds(cards, patterns)
         HandEvaluator._find_four_of_a_kinds(cards, patterns)
         HandEvaluator._find_straights(cards, patterns)
-        HandEvaluator._find_flushes(cards, patterns)
+        HandEvaluator._find_flushes(cards, patterns)  # Add flushes
         
         # Find complex patterns that build on simpler ones
         HandEvaluator._find_two_pairs(patterns)
@@ -66,7 +66,7 @@ class HandEvaluator:
         # Determine best hand type
         best_type = HandType.HIGH_CARD
         for hand_type in [HandType.STRAIGHT_FLUSH, HandType.FOUR_OF_A_KIND, 
-                        HandType.FULL_HOUSE, HandType.STRAIGHT, 
+                        HandType.FULL_HOUSE, HandType.FLUSH, HandType.STRAIGHT,  # Note FLUSH before STRAIGHT
                         HandType.THREE_OF_A_KIND, HandType.TWO_PAIR, HandType.PAIR]:
             if patterns[hand_type]:
                 best_type = hand_type
@@ -178,31 +178,6 @@ class HandEvaluator:
                 )
     
     @staticmethod
-    def _find_flushes(cards: List[Card], patterns: Dict[HandType, List[HandPattern]]):
-        """Find all flushes in the hand"""
-        # Group cards by suit
-        suit_groups = defaultdict(list)
-        for card in cards:
-            suit_groups[card.suit].append(card)
-            
-        # Add wild cards to all suits
-        wild_cards = [card for card in cards if card.enhancement == CardEnhancement.WILD]
-        for suit in Suit:
-            if suit != Suit.WILD:
-                suit_groups[suit].extend(wild_cards)
-                
-        # Find flushes (5 or more cards of the same suit)
-        for suit, group in suit_groups.items():
-            if len(group) >= 5:
-                # Create a flush with the 5 highest cards
-                sorted_group = sorted(group, key=lambda card: card.rank.value, reverse=True)
-                flush_cards = sorted_group[:5]
-                
-                patterns[HandType.STRAIGHT].append(  # Flushes are stored as straights
-                    HandPattern(HandType.STRAIGHT, flush_cards)
-                )
-    
-    @staticmethod
     def _find_two_pairs(patterns: Dict[HandType, List[HandPattern]]):
         """Find all two pair combinations using already identified pairs"""
         pairs = patterns[HandType.PAIR]
@@ -223,7 +198,28 @@ class HandEvaluator:
                         patterns[HandType.TWO_PAIR].append(
                             HandPattern(HandType.TWO_PAIR, two_pair_cards)
                         )
-    
+    def _find_flushes(cards: List[Card], patterns: Dict[HandType, List[HandPattern]]):
+        """Find all flushes in the hand"""
+        # Group cards by suit
+        suit_groups = defaultdict(list)
+        for card in cards:
+            if card.enhancement != CardEnhancement.WILD:
+                suit_groups[card.suit].append(card)
+            else:
+                # Add wild cards to all suits
+                for suit in Suit:
+                    if suit != Suit.WILD:
+                        suit_groups[suit].append(card)
+        
+        for suit, group in suit_groups.items():
+            if len(group) >= 5:
+                sorted_group = sorted(group, key=lambda card: card.rank.value, reverse=True)
+                flush_cards = sorted_group[:5]
+                
+                patterns[HandType.FLUSH].append(
+                    HandPattern(HandType.FLUSH, flush_cards)
+                )
+
     @staticmethod
     def _find_full_houses(patterns: Dict[HandType, List[HandPattern]]):
         """Find all full house combinations using three of a kinds and pairs"""
@@ -245,24 +241,49 @@ class HandEvaluator:
                         HandPattern(HandType.FULL_HOUSE, full_house_cards)
                     )
     
-    @staticmethod
     def _find_straight_flushes(cards: List[Card], patterns: Dict[HandType, List[HandPattern]]):
         """Find straight flushes by looking for straights that are also flushes"""
-        # Get all straights
-        straights = patterns[HandType.STRAIGHT]
+        suit_groups = defaultdict(list)
+        for card in cards:
+            if card.enhancement != CardEnhancement.WILD:
+                suit_groups[card.suit].append(card)
+            else:
+                for suit in Suit:
+                    if suit != Suit.WILD:
+                        suit_groups[suit].append(card)
         
-        for straight in straights:
-            # Check if all cards in the straight have the same suit
-            suits = {card.suit for card in straight.cards}
-            
-            # Allow wild cards to contribute to any suit
-            non_wild_suits = {card.suit for card in straight.cards 
-                             if card.enhancement != CardEnhancement.WILD}
-            
-            if len(non_wild_suits) <= 1:  # All cards have the same suit or are wild
-                patterns[HandType.STRAIGHT_FLUSH].append(
-                    HandPattern(HandType.STRAIGHT_FLUSH, straight.cards)
-                )
+        for suit, suited_cards in suit_groups.items():
+            if len(suited_cards) >= 5:
+                rank_values = sorted(set(card.rank.value for card in suited_cards))
+                
+                for i in range(len(rank_values) - 4):
+                    if rank_values[i+4] - rank_values[i] == 4:
+                        straight_ranks = set(range(rank_values[i], rank_values[i] + 5))
+                        straight_flush_cards = []
+                        
+                        for rank in straight_ranks:
+                            for card in suited_cards:
+                                if card.rank.value == rank:
+                                    straight_flush_cards.append(card)
+                                    break
+                        
+                        if len(straight_flush_cards) == 5:
+                            patterns[HandType.STRAIGHT_FLUSH].append(
+                                HandPattern(HandType.STRAIGHT_FLUSH, straight_flush_cards)
+                            )
+                
+                if set([14, 2, 3, 4, 5]).issubset(set(rank_values)):
+                    straight_flush_cards = []
+                    for rank in [14, 2, 3, 4, 5]:
+                        for card in suited_cards:
+                            if card.rank.value == rank:
+                                straight_flush_cards.append(card)
+                                break
+                    
+                    if len(straight_flush_cards) == 5:
+                        patterns[HandType.STRAIGHT_FLUSH].append(
+                            HandPattern(HandType.STRAIGHT_FLUSH, straight_flush_cards)
+                        )
     
     def evaluate_hand(self, cards: List[Card]) -> Tuple[HandType, Dict[str, bool], List[Card]]:
         """
@@ -278,17 +299,13 @@ class HandEvaluator:
             - Dictionary of all contained hand types
             - List of cards that make up the best hand
         """
-        # Use our analyze_hand method to get patterns
-        best_type, patterns = self.analyze_hand(cards)
+        best_type, patterns = HandEvaluator.analyze_hand(cards)
         
-        # Get the best pattern
-        best_pattern = self.get_best_pattern(patterns)
+        best_pattern = HandEvaluator.get_best_pattern(patterns)
         
-        # Get the list of scoring cards
         scoring_cards = best_pattern.cards if best_pattern else []
         
-        # Get contained hand types
-        contained_types = self.get_contained_hand_types(patterns)
+        contained_types = HandEvaluator.get_contained_hand_types(patterns)
         
         return (best_type, contained_types, scoring_cards)
 
@@ -332,6 +349,7 @@ class HandEvaluator:
             "two_pair": bool(patterns[HandType.TWO_PAIR]),
             "three_of_kind": bool(patterns[HandType.THREE_OF_A_KIND]),
             "straight": bool(patterns[HandType.STRAIGHT]),
+            "flush": bool(patterns[HandType.FLUSH]),
             "full_house": bool(patterns[HandType.FULL_HOUSE]),
             "four_of_kind": bool(patterns[HandType.FOUR_OF_A_KIND]),
             "straight_flush": bool(patterns[HandType.STRAIGHT_FLUSH])

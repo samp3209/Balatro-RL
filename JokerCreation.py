@@ -50,7 +50,7 @@ class GreenJoker(Joker): #NEED to store global played vs discard functionality n
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
         effect = JokerEffect()
-        effect.mult_add = round_info.get('hands_played', 0) - discards
+        effect.mult_add = max(0, round_info.get('hands_played', 0) - discards)
         return effect
     
 

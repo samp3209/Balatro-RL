@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import List, Optional, Union
 from Card import *
 from Hand import *
@@ -235,6 +236,7 @@ class Inventory:
     def shuffle_deck(self):
         """Shuffle the current deck."""
         random.shuffle(self.deck)
+        print(f"Shuffled deck with {len(self.deck)} cards")
 
     def get_deck_size(self) -> int:
         """Return the number of cards in the deck."""
@@ -247,9 +249,10 @@ class Inventory:
     def initialize_standard_deck(self):
         """Initialize a standard 52-card deck."""
         self.deck = []
-        suits = [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]
         
-        for suit in suits:
+        # Add cards with proper rank and suit enums
+        for suit in [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]:
+            self.deck.append(Card(suit, Rank.ACE))
             self.deck.append(Card(suit, Rank.TWO))
             self.deck.append(Card(suit, Rank.THREE))
             self.deck.append(Card(suit, Rank.FOUR))
@@ -260,6 +263,43 @@ class Inventory:
             self.deck.append(Card(suit, Rank.NINE))
             self.deck.append(Card(suit, Rank.TEN))
             self.deck.append(Card(suit, Rank.JACK))
-            self.deck.append(Card(suit, Rank.QUEEN)) 
+            self.deck.append(Card(suit, Rank.QUEEN))
             self.deck.append(Card(suit, Rank.KING))
-            self.deck.append(Card(suit, Rank.ACE))
+        
+        # Validate that we have exactly 52 cards
+        if len(self.deck) != 52:
+            print(f"WARNING: Deck initialized with {len(self.deck)} cards, expected 52")
+        
+        # Print deck distribution for debugging
+        self._print_deck_distribution()
+
+    def _print_deck_distribution(self):
+        """Print the distribution of cards in the deck by rank and suit"""
+        rank_counts = defaultdict(int)
+        suit_counts = defaultdict(int)
+        
+        for card in self.deck:
+            rank_counts[card.rank] += 1
+            suit_counts[card.suit] += 1
+        
+        print("Deck distribution:")
+        print("Ranks:", {rank.name: count for rank, count in rank_counts.items()})
+        print("Suits:", {suit.name: count for suit, count in suit_counts.items()})
+        print(f"Total cards: {len(self.deck)}")
+
+
+    def reset_deck(self, played_cards: List[Card], discarded_cards: List[Card], hand_cards: List[Card]):
+        """
+        Reset the deck by returning all played and discarded cards to the deck
+        
+        Args:
+            played_cards: Cards that were played
+            discarded_cards: Cards that were discarded
+            hand_cards: Cards still in hand
+        """
+        for card in played_cards + discarded_cards + hand_cards:
+            card.reset_state()
+            if card not in self.deck:
+                self.deck.append(card)
+        
+        self.shuffle_deck()

@@ -235,7 +235,10 @@ class Game:
     def apply_joker_effects(self, played_cards: List[Card], hand_type: HandType, contained_hands: Dict[str, bool]) -> Tuple[int, int, int]:
         """
         Apply all joker effects based on the current state
-        Returns (total_mult, total_chips, money_gained)
+        
+        Returns:
+            Tuple of (total_mult, base_chips, money_gained)
+            The caller should multiply total_mult by base_chips to get the final score
         """
         # First, get base values for the hand
         base_mult, base_chips = self.inventory.calculate_hand_value(hand_type, {
@@ -244,7 +247,6 @@ class Game:
         
         # Start with base values
         total_mult = base_mult
-        total_chips = base_chips
         money_gained = 0
         
         print(f"Base values: {base_mult} mult, {base_chips} chips")
@@ -271,11 +273,10 @@ class Game:
             
             # Apply effect
             old_mult = total_mult
-            old_chips = total_chips
             
             # First apply additive effects
             total_mult += effect.mult_add
-            total_chips += effect.chips
+            base_chips += effect.chips  # Add chips directly to the base amount
             
             # Then apply multiplicative effects
             total_mult *= effect.mult_mult
@@ -284,9 +285,11 @@ class Game:
             money_gained += effect.money
             
             print(f"  • {joker.name}: +{effect.mult_add} mult, x{effect.mult_mult} mult, +{effect.chips} chips, +${effect.money}")
-            print(f"  • Result: {old_mult} → {total_mult} mult, {old_chips} → {total_chips} chips")
+            print(f"  • Result: {old_mult} → {total_mult} mult, {base_chips} chips")
         
-        return (total_mult, total_chips, money_gained)
+        # Return the total multiplier and base chips
+        # The final score will be calculated as total_mult * base_chips by the caller
+        return (total_mult, base_chips, money_gained)
         
     def reset_for_new_round(self):
         """Reset game state for a new round"""
