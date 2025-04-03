@@ -243,7 +243,7 @@ class AnteShops:
         shops[2] = {
             "small_blind": [
                 {"item_type": ShopItemType.TAROT, "name": "Hierophant", "price": 3},
-                {"item_type": ShopItemType.JOKER, "name": "Showman Joker", "price": 5},
+                {"item_type": ShopItemType.JOKER, "name": "Bootstraps", "price": 5},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_ARCANA, "price": 6, 
                  "contents": ["Tower", "Moon", "Chariot", "World", "Wheel of Fortune"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.STANDARD, "price": 4, 
@@ -278,7 +278,7 @@ class AnteShops:
             ],
             "medium_blind": [
                 {"item_type": ShopItemType.JOKER, "name": "Crafty Joker", "price": 4},
-                {"item_type": ShopItemType.JOKER, "name": "Ride the Bus Joker", "price": 6},
+                {"item_type": ShopItemType.JOKER, "name": "Cloud 9", "price": 6},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_ARCANA, "price": 6, 
                  "contents": ["Strength", "Fool", "Moon", "Star", "Justice"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.STANDARD, "price": 4, 
@@ -399,7 +399,7 @@ class AnteShops:
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.STANDARD, "price": 4, 
                  "contents": ["10 club", "10 gold stamp heart", "A mult diamond"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_BUFFOON, "price": 6, 
-                 "contents": ["Fortune Teller Joker", "Faceless Joker", "Ride the Bus Joker", "Business Card Joker"]}
+                 "contents": ["Fortune Teller Joker", "Faceless Joker", "Cloud 9", "Business Card Joker"]}
             ]
         }
         
