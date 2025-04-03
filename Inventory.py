@@ -61,7 +61,7 @@ class Inventory:
             self.uncommon_joker_count += 1
         return True
     
-    def remove_joker(self, joker_index: int) -> Optional[Joker]:
+    def remove_joker(self, joker_index: int):
         """Remove joker at given index and return it."""
         if 0 <= joker_index < len(self.jokers):
             joker = self.jokers.pop(joker_index)
@@ -248,6 +248,18 @@ class Inventory:
         """Initialize a standard 52-card deck."""
         self.deck = []
         suits = [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]
+        
         for suit in suits:
-            for rank in range(1, 14):
-                self.deck.append(Card(rank, suit))
+            self.deck.append(Card(suit, Rank.TWO))
+            self.deck.append(Card(suit, Rank.THREE))
+            self.deck.append(Card(suit, Rank.FOUR))
+            self.deck.append(Card(suit, Rank.FIVE))
+            self.deck.append(Card(suit, Rank.SIX))
+            self.deck.append(Card(suit, Rank.SEVEN))
+            self.deck.append(Card(suit, Rank.EIGHT))
+            self.deck.append(Card(suit, Rank.NINE))
+            self.deck.append(Card(suit, Rank.TEN))
+            self.deck.append(Card(suit, Rank.JACK))
+            self.deck.append(Card(suit, Rank.QUEEN)) 
+            self.deck.append(Card(suit, Rank.KING))
+            self.deck.append(Card(suit, Rank.ACE))

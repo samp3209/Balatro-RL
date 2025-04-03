@@ -66,8 +66,8 @@ class HandEvaluator:
         # Determine best hand type
         best_type = HandType.HIGH_CARD
         for hand_type in [HandType.STRAIGHT_FLUSH, HandType.FOUR_OF_A_KIND, 
-                         HandType.FULL_HOUSE, HandType.STRAIGHT, 
-                         HandType.THREE_OF_A_KIND, HandType.TWO_PAIR, HandType.PAIR]:
+                        HandType.FULL_HOUSE, HandType.STRAIGHT, 
+                        HandType.THREE_OF_A_KIND, HandType.TWO_PAIR, HandType.PAIR]:
             if patterns[hand_type]:
                 best_type = hand_type
                 break
@@ -264,21 +264,49 @@ class HandEvaluator:
                     HandPattern(HandType.STRAIGHT_FLUSH, straight.cards)
                 )
     
+    def evaluate_hand(self, cards: List[Card]) -> Tuple[HandType, Dict[str, bool], List[Card]]:
+        """
+        Analyze a hand to determine the best hand type, all contained hand types,
+        and the cards that make up the best hand.
+        
+        Args:
+            cards: List of cards to evaluate
+            
+        Returns:
+            Tuple containing:
+            - The best hand type
+            - Dictionary of all contained hand types
+            - List of cards that make up the best hand
+        """
+        # Use our analyze_hand method to get patterns
+        best_type, patterns = self.analyze_hand(cards)
+        
+        # Get the best pattern
+        best_pattern = self.get_best_pattern(patterns)
+        
+        # Get the list of scoring cards
+        scoring_cards = best_pattern.cards if best_pattern else []
+        
+        # Get contained hand types
+        contained_types = self.get_contained_hand_types(patterns)
+        
+        return (best_type, contained_types, scoring_cards)
+
     @staticmethod
-    def mark_scoring_cards(cards: List[Card], best_pattern: HandPattern):
+    def mark_scoring_cards(cards: List[Card], scoring_cards: List[Card]):
         """
         Mark cards that are part of the scoring hand
         
         Args:
             cards: All cards being played
-            best_pattern: The pattern that makes up the best hand
+            scoring_cards: Cards that make up the best hand
         """
         # Reset scoring flag for all cards
         for card in cards:
             card.scored = False
             
-        # Get identifying information for cards in the best pattern
-        scoring_card_ids = {(card.rank.value, card.suit) for card in best_pattern.cards}
+        # Get identifying information for scoring cards
+        scoring_card_ids = {(card.rank.value, card.suit) for card in scoring_cards}
         
         # Mark cards that match
         for card in cards:

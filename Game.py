@@ -237,10 +237,17 @@ class Game:
         Apply all joker effects based on the current state
         Returns (total_mult, total_chips, money_gained)
         """
-        base_mult, base_chips = self.calculate_hand_score(hand_type)
+        # First, get base values for the hand
+        base_mult, base_chips = self.inventory.calculate_hand_value(hand_type, {
+            'stake_multiplier': self.stake_multiplier
+        })
+        
+        # Start with base values
         total_mult = base_mult
         total_chips = base_chips
         money_gained = 0
+        
+        print(f"Base values: {base_mult} mult, {base_chips} chips")
         
         # Game state information for jokers
         round_info = {
@@ -252,7 +259,9 @@ class Game:
             'face_cards_discarded_count': self.face_cards_discarded_count
         }
         
+        # Apply each joker's effect
         for joker in self.inventory.jokers:
+            print(f"Applying {joker.name} effect...")
             effect = joker.calculate_effect(
                 played_cards, 
                 self.hands_discarded, 
@@ -261,16 +270,27 @@ class Game:
             )
             
             # Apply effect
-            total_mult = total_mult + effect.mult_add
-            total_mult = total_mult * effect.mult_mult
-            total_chips = total_chips + effect.chips
-            money_gained = money_gained + effect.money
+            old_mult = total_mult
+            old_chips = total_chips
             
+            # First apply additive effects
+            total_mult += effect.mult_add
+            total_chips += effect.chips
+            
+            # Then apply multiplicative effects
+            total_mult *= effect.mult_mult
+            
+            # Add money
+            money_gained += effect.money
+            
+            print(f"  • {joker.name}: +{effect.mult_add} mult, x{effect.mult_mult} mult, +{effect.chips} chips, +${effect.money}")
+            print(f"  • Result: {old_mult} → {total_mult} mult, {old_chips} → {total_chips} chips")
+        
         return (total_mult, total_chips, money_gained)
         
     def reset_for_new_round(self):
         """Reset game state for a new round"""
-        # Reset cards
+        # Reset cards in deck
         for card in self.inventory.deck:
             card.reset_state()
             

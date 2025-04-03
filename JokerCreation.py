@@ -143,7 +143,7 @@ class SmileyJoker(Joker):
 
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
-        face_count = sum(1 for card in hand if card.rank in [Rank.JACK, Rank.QUEEN, Rank.King] and card.scored == True)
+        face_count = sum(1 for card in hand if card.rank in [Rank.JACK, Rank.QUEEN, Rank.KING] and card.scored == True)
         effect.mult_add = 5 * face_count
         return effect
 

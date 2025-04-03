@@ -103,21 +103,61 @@ class GameManager:
         self.contained_hand_types = contained_hands
         self.scoring_cards = scoring_cards
         
-        # Calculate score
-        mult, chips, money = self.game.apply_joker_effects(
+        # Build round_info for joker effects
+        round_info = {
+            'hand_type': hand_type.name.lower(),
+            'contained_hands': contained_hands,
+            'hands_played': self.game.hands_played,
+            'inventory': self.game.inventory,
+            'max_discards': self.max_discards,
+            'face_cards_discarded_count': self.game.face_cards_discarded_count
+        }
+        
+        # Calculate score with joker effects
+        total_mult, total_chips, money_gained = self.game.apply_joker_effects(
             self.played_cards, hand_type, contained_hands
         )
         
         # Update score and counters
-        self.current_score += chips
-        self.game.inventory.money += money
+        self.current_score += total_chips
+        self.game.inventory.money += money_gained
         self.hands_played += 1
+        self.game.hands_played += 1
         
         # Check if ante is beaten
         if self.current_score >= self.game.current_blind:
             self.current_ante_beaten = True
+        
+        # Get message about the play
+        message = f"Played {hand_type.name} for {total_chips} chips (x{total_mult} mult)"
+        
+        # If there are cards remaining in hand and we haven't beaten the ante,
+        # deal a new hand for the next round
+        if self.hands_played >= 1 and not self.current_ante_beaten:
+            # Deal a new hand for the next round
+            self.reset_hand_state()
+            message += " - Dealing a new hand."
+        
+        return (True, message)
+
+    def reset_hand_state(self):
+        """Reset the hand state for a new hand within the same ante."""
+        self.played_cards = []
+                
+        # Step 1: Return all cards to the deck
+        for card in self.current_hand:
+            card.reset_state()
+            self.game.inventory.add_card_to_deck(card)
             
-        return (True, f"Played {hand_type.name} for {chips} chips (x{mult} mult)")
+        self.current_hand = []
+        
+        self.game.inventory.shuffle_deck()
+        
+        self.current_hand = self.game.deal_hand(self.max_hand_size)
+        
+        self.hand_result = None
+        self.contained_hand_types = {}
+        self.scoring_cards = []
     
     def discard_cards(self, card_indices: List[int]) -> Tuple[bool, str]:
         """
@@ -169,8 +209,8 @@ class GameManager:
         if not self.current_hand:
             return None
             
-        # Evaluate all possible hands from current cards
-        hand_type, _, scoring_cards = self.hand_evaluator.analyze_hand(self.current_hand)
+        # Use evaluate_hand instead of analyze_hand to get the 3 values needed
+        hand_type, _, scoring_cards = self.hand_evaluator.evaluate_hand(self.current_hand)
         
         return (hand_type, scoring_cards)
     
@@ -233,38 +273,33 @@ class GameManager:
         if not self.current_ante_beaten:
             return False
             
-        # Move to next ante
         self.game.current_ante += 1
         
-        # Set the new blind based on ante progression
         blind_progression = {
-            1: 300,   # Small blind
-            2: 450,   # Medium blind 
-            3: 600,  # Boss blind
-            4: 800,  # Small blind for ante 2
-            5: 1200,  # Medium blind for ante 2
-            6: 1600,  # Boss blind for ante 2
-            7: 2000, # Small blind for ante 3
-            8: 3000,  # Medium blind for ante 3
-            9: 4000,
-            10: 5000,
-            11: 7500,
-            12: 10000,
-            13: 11000,
-            14: 17500,
-            15: 22000,
-            16: 20000,
-            17: 30000,
-            18: 40000,
-            19: 35000,
-            20: 52500,
-            21: 70000,
-            22: 50000,
-            23: 75000,
-            24: 100000,
+            # Ante 1
+            (1, 1): 300,   # Small blind
+            (1, 2): 450,   # Medium blind 
+            (1, 3): 600,   # Boss blind
+            # Ante 2
+            (2, 1): 800,   # Small blind
+            (2, 2): 1200,  # Medium blind
+            (2, 3): 1600,  # Boss blind
+            # Ante 3
+            (3, 1): 2000,  # Small blind
+            (3, 2): 3000,  # Medium blind
+            (3, 3): 4000   # Boss blind
         }
         
-        self.game.current_blind = blind_progression.get(self.game.current_ante, 300)
+        # If we've beaten all 3 blinds in an ante, move to the next ante's first blind
+        current_blind_in_ante = (self.game.current_ante % 3)
+        if current_blind_in_ante == 0:
+            current_blind_in_ante = 3
+            
+        # Get the blind value from the progression
+        self.game.current_blind = blind_progression.get(
+            (self.game.current_ante // 3 + 1, current_blind_in_ante), 
+            300  # Default if not found
+        )
         
         # Reset for the new ante
         self.game.reset_for_new_round()
