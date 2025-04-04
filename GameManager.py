@@ -370,7 +370,6 @@ class GameManager:
         
         print(f"Earned ${money_earned} for beating the blind with {hands_left} hands left to play")
         
-        # Increment the ante counter
         self.game.current_ante += 1
         
         blind_progression = {
@@ -517,7 +516,7 @@ class GameManager:
         self.discarded_cards = []
         self.current_hand = []
         
-        #self._log_card_distribution("AFTER RESET")
+        self._log_card_distribution("AFTER RESET")
         
         self.deal_new_hand()
         
@@ -525,7 +524,6 @@ class GameManager:
             if hasattr(joker, 'reset'):
                 joker.reset()
                 
-        # Apply boss blind effect for the new blind
         self.apply_boss_blind_effect()
                 
     def _log_card_distribution(self, prefix=""):
@@ -546,8 +544,8 @@ class GameManager:
         
         total_cards = deck_size + hand_size + played_size + discarded_size
         
-        print(f"\n{prefix} CARD DISTRIBUTION:")
-        print(f"Deck: {deck_size}, Hand: {hand_size}, Played: {played_size}, Discarded: {discarded_size}")
-        print(f"Total cards: {total_cards} (should be 52)")
-        print(f"Ranks: {dict(rank_counts)}")
-        print(f"Suits: {dict(suit_counts)}")
+        #print(f"\n{prefix} CARD DISTRIBUTION:")
+        #print(f"Deck: {deck_size}, Hand: {hand_size}, Played: {played_size}, Discarded: {discarded_size}")
+        print(f"Total cards: {total_cards} (should be 52 in base case)")
+        #print(f"Ranks: {dict(rank_counts)}")
+        #print(f"Suits: {dict(suit_counts)}")

@@ -4,6 +4,8 @@ from Enums import *
 from Card import Card
 from Hand import hand
 from Inventory import Inventory
+from EnhancementManager import EnhancementManager
+
 
 class Game:
     def __init__(self, seed=None):
@@ -38,19 +40,15 @@ class Game:
 
     def set_boss_blind_effect(self):
         """Set a random boss blind effect when a boss blind is reached"""
-        # Boss blinds occur every third blind (i.e., when ante % 3 == 0)
         is_boss_blind = (self.current_ante % 3 == 0)
         
         if is_boss_blind:
             self.is_boss_blind = True
             
-            # For the GameTest simulation, we'll now rotate through boss blind effects
-            # rather than always using the same one for better testing
             boss_effects = list(BossBlindEffect)
             effect_index = (self.current_ante // 3 - 1) % len(boss_effects)
             self.active_boss_blind_effect = boss_effects[effect_index]
             
-            # Print a highly visible message about the boss blind effect
             print(f"\n==================================================")
             print(f"🔥 BOSS BLIND ACTIVE: {self.active_boss_blind_effect.name} 🔥")
             print(f"==================================================\n")
@@ -124,6 +122,70 @@ class Game:
                 
             return hand
     
+    def apply_card_enhancements(self, played_cards: List[Card], hand_type: HandType, 
+                            base_mult: int, base_chips: int) -> Tuple[int, int]:
+        """
+        Apply all card enhancement effects to the score
+        
+        Args:
+            played_cards: Cards that were played
+            hand_type: The hand type being scored
+            base_mult: Base multiplier value
+            base_chips: Base chip value
+            
+        Returns:
+            Tuple of (total_mult, total_chips) after applying enhancements
+        """
+        total_mult, total_chips = EnhancementManager.apply_enhancement_effects(
+            played_cards, 
+            hand_type, 
+            base_mult, 
+            base_chips,
+            self.is_boss_blind,
+            self.active_boss_blind_effect
+        )
+        
+        return total_mult, total_chips
+    
+
+    def process_post_hand_enhancements(self, played_cards: List[Card], hand_cards: List[Card]) -> Dict:
+        """
+        Process enhancement effects that happen after a hand is played or discarded
+        
+        Args:
+            played_cards: Cards that were played in the hand
+            hand_cards: Cards that are still in hand
+            
+        Returns:
+            Dict with effects like {'money_gained': X}
+        """
+        all_cards = played_cards + hand_cards
+        result = EnhancementManager.process_enhancement_after_hand(all_cards, self.inventory)
+        
+        if 'money_gained' in result and result['money_gained'] > 0:
+            self.inventory.money += result['money_gained']
+            
+        return result
+    
+    def handle_enhanced_deck_reset(self):
+        """
+        Handle special cases when resetting the deck
+        (removing broken glass card)
+        """
+        cards_to_remove = []
+        
+        for card in self.inventory.deck:
+            if card.enhancement == CardEnhancement.GLASS and not card.in_deck:
+                cards_to_remove.append(card)
+        
+        for card in cards_to_remove:
+            if card in self.inventory.deck:
+                self.inventory.deck.remove(card)
+        
+        if cards_to_remove:
+            print(f"Removed {len(cards_to_remove)} broken glass cards from the deck")
+
+
     def play_cards(self, cards: List[Card]) -> bool:
         """
         Mark specified cards as played
@@ -152,7 +214,6 @@ class Game:
         
         self.played_cards.extend(cards)
         
-        # Apply the DISCARD_RANDOM boss blind effect after playing cards
         if self.is_boss_blind and self.active_boss_blind_effect == BossBlindEffect.DISCARD_RANDOM:
             discarded = self.discard_random_cards(2)
             if discarded:
@@ -433,7 +494,6 @@ class Game:
             'stake_multiplier': self.stake_multiplier
         })
         
-        # Apply boss blind effect to base values first, if applicable
         if self.is_boss_blind and self.active_boss_blind_effect == BossBlindEffect.HALVE_VALUES:
             original_mult = base_mult
             original_chips = base_chips
@@ -441,10 +501,18 @@ class Game:
             base_chips = max(5, base_chips // 2)
             print(f"Boss Blind HALVE_VALUES: base values reduced from {original_mult} mult, {original_chips} chips to {base_mult} mult, {base_chips} chips")
         
-        total_mult = base_mult
-        money_gained = 0
+        enhanced_mult, enhanced_chips = self.apply_card_enhancements(
+            played_cards, 
+            hand_type, 
+            base_mult, 
+            base_chips
+        )
         
-        print(f"Base values: {base_mult} mult, {base_chips} chips")
+        total_mult = enhanced_mult
+        money_gained = 0
+        base_chips = enhanced_chips
+        
+        print(f"After enhancements: {total_mult} mult, {base_chips} chips")
         
         debuffed_cards = []
         for card in played_cards:
@@ -495,7 +563,6 @@ class Game:
                 non_debuffed_cards.append(card)
         
         for joker in self.inventory.jokers:
-            #print(f"Applying {joker.name} effect...")
             effect = joker.calculate_effect(
                 non_debuffed_cards, 
                 self.hands_discarded, 
@@ -512,9 +579,6 @@ class Game:
             total_mult *= effect.mult_mult
             
             money_gained += effect.money
-            
-            #print(f"  • {joker.name}: +{effect.mult_add} mult, x{effect.mult_mult} mult, +{effect.chips} chips, +${effect.money}")
-            #print(f"  • Result: {old_mult} → {total_mult} mult, {base_chips} chips")
 
         if count_all_played:
             base_mult, base_chips = self.inventory.calculate_hand_value(hand_type, {
@@ -522,7 +586,7 @@ class Game:
                 'count_all_played': True
             })
             print(f"Splash Joker: Recalculated with all played cards: {base_mult} mult, {base_chips} chips")
-       
+    
         rank_chips = 0
         for card in played_cards:
             if card.scored:
@@ -585,11 +649,18 @@ class Game:
         if retrigger_chips > 0:
             base_chips += retrigger_chips
         print(f"  • Total retrigger bonus: +{retrigger_chips} chips")
-
+        
+        post_hand_effects = self.process_post_hand_enhancements(played_cards, [])
+        if 'money_gained' in post_hand_effects:
+            money_gained += post_hand_effects['money_gained']
+        
         return (total_mult, base_chips, money_gained)
+
         
     def reset_for_new_round(self):
-        """Reset game state for a new round"""
+        """Reset game state for a new round with special handling for enhanced cards"""
+        self.handle_enhanced_deck_reset()
+        
         for card in self.inventory.deck + self.played_cards + self.discarded_cards:
             card.reset_state()
             

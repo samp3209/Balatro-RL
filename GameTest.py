@@ -245,11 +245,9 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
     print(f"\n=== Opening {pack_type} ===")
     print("Pack contents:")
     
-    # Display the pack contents
     for i, item in enumerate(pack_contents):
         print(f"{i}: {item}")
     
-    # Determine how many items to select based on pack type
     if "MEGA" in pack_type.upper():
         num_to_select = 2
     else:
@@ -258,16 +256,13 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
     message = ""
     
     if "STANDARD" in pack_type.upper():
-        # For standard packs, add cards to the deck
         for i in range(min(num_to_select, len(pack_contents))):
             # Simple AI: randomly select a card from the pack
             selected_idx = random.randint(0, len(pack_contents) - 1)
             
             try:
-                # Try to parse the card string
                 card_string = pack_contents[selected_idx]
                 
-                # Simple card parsing logic
                 parts = card_string.split()
                 
                 rank_map = {"A": Rank.ACE, "2": Rank.TWO, "3": Rank.THREE, "4": Rank.FOUR, 
@@ -279,7 +274,6 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                            "club": Suit.CLUBS, "clubs": Suit.CLUBS, "♣": Suit.CLUBS,
                            "spade": Suit.SPADES, "spades": Suit.SPADES, "♠": Suit.SPADES}
                 
-                # Extract rank
                 rank_str = parts[0]
                 rank = rank_map.get(rank_str)
                 if not rank:
@@ -290,16 +284,13 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                                 rank = r
                                 break
                     except ValueError:
-                        rank = Rank.ACE  # Default to Ace if parsing fails
-                
-                # Extract suit (usually the last part)
+                        rank = Rank.ACE
+
                 suit_str = parts[-1].lower() if len(parts) > 1 else "hearts"
-                suit = suit_map.get(suit_str, Suit.HEARTS)  # Default to Hearts if not found
+                suit = suit_map.get(suit_str, Suit.HEARTS)
                 
-                # Create the card
                 card = Card(suit, rank)
                 
-                # Check for enhancements
                 enhancement_map = {
                     "foil": CardEnhancement.FOIL,
                     "holo": CardEnhancement.HOLO,
@@ -318,7 +309,6 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                     if part.lower() in enhancement_map:
                         card.enhancement = enhancement_map[part.lower()]
                 
-                # Add card to deck
                 inventory.add_card_to_deck(card)
                 
                 message += f"Added {card_string} to deck. "
@@ -329,16 +319,13 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                 message += f"Failed to add card: {e}. "
     
     elif "CELESTIAL" in pack_type.upper():
-        # For celestial packs, immediately use the planet card
         for i in range(min(num_to_select, len(pack_contents))):
-            # Select planet randomly
             selected_idx = random.randint(0, len(pack_contents) - 1)
             planet_name = pack_contents[selected_idx]
             
             try:
                 planet = create_planet_by_name(planet_name)
                 if planet and hasattr(planet, 'planet_type'):
-                    # Use the planet immediately to increase its level
                     planet_type = planet.planet_type
                     current_level = inventory.planet_levels.get(planet_type, 1)
                     inventory.planet_levels[planet_type] = current_level + 1
@@ -353,17 +340,14 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                 message += f"Failed to upgrade planet: {e}. "
     
     elif "ARCANA" in pack_type.upper():
-        # For arcana packs, use the tarot card immediately
         if game_manager is not None and game_manager.current_hand:
             for i in range(min(num_to_select, len(pack_contents))):
-                # Select tarot randomly
                 selected_idx = random.randint(0, len(pack_contents) - 1)
                 tarot_name = pack_contents[selected_idx]
                 
                 try:
                     tarot = create_tarot_by_name(tarot_name)
                     if tarot:
-                        # Special case for The Emperor - adds to inventory
                         if tarot.tarot_type == TarotType.THE_EMPEROR:
                             if inventory.get_available_space() > 0:
                                 inventory.add_consumable(tarot)
@@ -373,15 +357,12 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                                 message += f"No space to add {tarot_name}. "
                                 print(f"No space to add {tarot_name}")
                         else:
-                            # Get required number of cards for this tarot
                             cards_required = tarot.selected_cards_required
                             if cards_required > 0:
-                                # Select random cards from current hand to apply tarot effect
                                 hand = game_manager.current_hand
                                 if len(hand) >= cards_required:
                                     selected_cards = random.sample(hand, cards_required)
                                     
-                                    # Apply tarot effect
                                     game_state = {
                                         'money': inventory.money,
                                         'last_tarot_used': inventory.last_tarot,
@@ -390,12 +371,10 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                                     
                                     effect = tarot.apply_effect(selected_cards, inventory, game_state)
                                     
-                                    # Update message
                                     effect_msg = effect.message if hasattr(effect, 'message') else ""
                                     message += f"Used {tarot_name} tarot: {effect_msg} "
                                     print(f"Used {tarot_name} tarot on {cards_required} card(s): {effect_msg}")
                                     
-                                    # Update money if needed
                                     if hasattr(effect, 'money_gained') and effect.money_gained > 0:
                                         inventory.money += effect.money_gained
                                         message += f"Gained ${effect.money_gained}. "
@@ -403,7 +382,6 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                                     message += f"Not enough cards in hand to use {tarot_name}. "
                                     print(f"Not enough cards in hand to use {tarot_name}")
                             else:
-                                # For tarots that don't require card selection
                                 game_state = {
                                     'money': inventory.money,
                                     'last_tarot_used': inventory.last_tarot,
@@ -412,12 +390,10 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                                 
                                 effect = tarot.apply_effect([], inventory, game_state)
                                 
-                                # Update message
                                 effect_msg = effect.message if hasattr(effect, 'message') else ""
                                 message += f"Used {tarot_name} tarot: {effect_msg} "
                                 print(f"Used {tarot_name} tarot: {effect_msg}")
                                 
-                                # Update money if needed
                                 if hasattr(effect, 'money_gained') and effect.money_gained > 0:
                                     inventory.money += effect.money_gained
                                     message += f"Gained ${effect.money_gained}. "
@@ -432,14 +408,11 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
             print("No cards in hand to use tarot effects")
     
     elif "BUFFOON" in pack_type.upper():
-        # For buffoon packs, add joker cards to inventory
         for i in range(min(num_to_select, len(pack_contents))):
-            # Select card randomly
             selected_idx = random.randint(0, len(pack_contents) - 1)
             item_name = pack_contents[selected_idx]
             
             try:
-                # Try to create a joker
                 joker = create_joker(item_name)
                 if joker and inventory.has_joker_space():
                     inventory.add_joker(joker)
@@ -460,7 +433,6 @@ def simulate_game():
     game_manager = GameManager(seed=42)
     game_manager.start_new_game()
     
-    # Initialize all shops for the game
     all_shops = initialize_shops_for_game()
     
     jokers = ["Mr. Bones", "Clever", "Smiley"]
@@ -470,7 +442,6 @@ def simulate_game():
             game_manager.game.inventory.add_joker(joker)
             print(f"Added {joker_name} to inventory")
     
-    # Give starting money
     game_manager.game.inventory.money = 10
     
     print("\n===== STARTING GAME =====")
@@ -481,7 +452,7 @@ def simulate_game():
     # Game loop
     max_rounds = 30
     rounds_played = 0
-    max_loop_iterations = 30 # Prevent infinite loops
+    max_loop_iterations = 30
     loop_count = 0
     last_ante = 0
     show_shop_next = False
@@ -490,7 +461,6 @@ def simulate_game():
         rounds_played += 1
         loop_count += 1
         
-        # Check if we should show the shop (after beating a blind)
         if show_shop_next:
             print("\n===== SHOP PHASE =====")
             shop = get_shop_for_current_ante(game_manager, all_shops)
@@ -511,13 +481,12 @@ def simulate_game():
               f"Discards Used: {game_manager.discards_used}/{game_manager.max_discards_per_round}, " + 
               f"Score: {game_manager.current_score}/{game_manager.game.current_blind}")
         
-        # Check if blind is beaten, advance to next blind and show shop next iteration
         if game_manager.current_ante_beaten:
             print(f"Blind beaten! Moving to next blind.")
-            current_ante = game_manager.game.current_ante  # Store current ante before advancing
+            current_ante = game_manager.game.current_ante 
             game_manager.next_ante()
-            loop_count = 0  # Reset loop counter when advancing to next ante
-            show_shop_next = True  # Show shop after beating a blind
+            loop_count = 0 
+            show_shop_next = True
             continue
             
         print_hand(game_manager.current_hand)
@@ -552,7 +521,6 @@ def simulate_game():
                 recommended_indices.append(forced_idx)
                 print(f"Added forced card at index {forced_idx} to recommended play")
         
-        # Decide whether to discard or play
         if game_manager.discards_used < game_manager.max_discards_per_round:
             best_hand_info = game_manager.get_best_hand_from_current()
             if best_hand_info:
@@ -571,32 +539,29 @@ def simulate_game():
                         print(f"DISCARD: {message}")
                         continue
         
-        # Play the recommended cards if we have a recommendation and haven't discarded
         if recommended_indices:
             success, message = game_manager.play_cards(recommended_indices)
             print(f"PLAY: {message}")
             
             if game_manager.current_ante_beaten:
                 print(f"Ante beaten! Score: {game_manager.current_score}/{game_manager.game.current_blind}")
-                current_ante = game_manager.game.current_ante  # Store current ante before advancing
+                current_ante = game_manager.game.current_ante  
                 game_manager.next_ante()
-                loop_count = 0  # Reset loop counter when advancing to next ante
-                show_shop_next = True  # Show shop after beating a blind
+                loop_count = 0
+                show_shop_next = True
             continue
         else:
-            # If we have no recommendation but still have cards, try to play the best we can
             if game_manager.current_hand:
-                # Just play all cards as a last resort
                 play_indices = list(range(len(game_manager.current_hand)))
                 success, message = game_manager.play_cards(play_indices)
                 print(f"PLAY (all cards): {message}")
                 
                 if game_manager.current_ante_beaten:
                     print(f"Ante beaten! Score: {game_manager.current_score}/{game_manager.game.current_blind}")
-                    current_ante = game_manager.game.current_ante  # Store current ante before advancing
+                    current_ante = game_manager.game.current_ante
                     game_manager.next_ante()
-                    loop_count = 0  # Reset loop counter when advancing to next ante
-                    show_shop_next = True  # Show shop after beating a blind
+                    loop_count = 0 
+                    show_shop_next = True 
                 continue
     
     print("\n===== GAME OVER =====")
