@@ -124,3 +124,14 @@ class PackType(Enum):
     JUMBO_ARCANA = "Jumbo Arcana Pack"
     MEGA_CELESTIAL = "Mega Celestial Pack"
     MEGA_ARCANA = "Mega Arcana Pack"
+
+
+class BossBlindEffect(Enum):
+    CLUB_DEBUFF = auto()  # All Club Cards are Debuffed
+    HALVE_VALUES = auto()  # Base Chips and Mult are halved
+    FACE_CARDS_DOWN = auto()  # All face cards are drawn face down
+    RANDOM_CARDS_DOWN = auto()  # 1 in 7 Cards get drawn face down
+    DISCARD_RANDOM = auto()  # Discards 2 random cards per hand played
+    FIRST_HAND_DOWN = auto()  # First 8 cards dealt are face down
+    PREVIOUS_CARDS_DEBUFF = auto()  # Cards played previously are debuffed
+    FORCE_CARD_SELECTION = auto()  # Forces one card to be selected to be played (or discarded) every hand

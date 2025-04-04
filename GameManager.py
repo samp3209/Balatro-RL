@@ -33,18 +33,56 @@ class GameManager:
         self.current_ante_beaten = False
         self.game_over = False
         
+        self.boss_blind_message = ""
+
     def start_new_game(self):
         """Start a new game with a fresh deck and initial ante"""
         self.game.initialize_deck()
         self.deal_new_hand()
         self.game_over = False
-        
+
+        self.apply_boss_blind_effect()
+
+    
+    def apply_boss_blind_effect(self):
+        """Apply boss blind effect if at a boss blind"""
+        effect = self.game.set_boss_blind_effect()
+        if effect:
+            self.boss_blind_message = f"Boss Blind Effect: {effect.name}"
+            print(self.boss_blind_message)
+            
+            if effect == BossBlindEffect.DISCARD_RANDOM:
+                self.boss_blind_message += " - 2 random cards will be discarded per hand played"
+            elif effect == BossBlindEffect.HALVE_VALUES:
+                self.boss_blind_message += " - Base chips and mult are halved"
+            elif effect == BossBlindEffect.CLUB_DEBUFF:
+                self.boss_blind_message += " - All Club cards are debuffed (reduced value)"
+            elif effect == BossBlindEffect.FACE_CARDS_DOWN:
+                self.boss_blind_message += " - All face cards are face down"
+            elif effect == BossBlindEffect.RANDOM_CARDS_DOWN:
+                self.boss_blind_message += " - 1 in 7 cards are face down"
+            elif effect == BossBlindEffect.FIRST_HAND_DOWN:
+                self.boss_blind_message += " - First 8 cards dealt are face down"
+            elif effect == BossBlindEffect.PREVIOUS_CARDS_DEBUFF:
+                self.boss_blind_message += " - Cards played previously in this ante are debuffed"
+            elif effect == BossBlindEffect.FORCE_CARD_SELECTION:
+                self.boss_blind_message += " - One card must be selected every hand"
+        else:
+            self.boss_blind_message = ""
+
+
     def deal_new_hand(self):
         """Deal a new hand of cards from the deck"""
         self.current_hand = []
         self.played_cards = []
         
         self.current_hand = self.game.deal_hand(self.max_hand_size)
+        
+        if self.game.is_boss_blind:
+            if self.game.active_boss_blind_effect == BossBlindEffect.FORCE_CARD_SELECTION:
+                self.forced_card = self.game.get_forced_card(self.current_hand)
+                if self.forced_card:
+                    print(f"Boss Blind Effect: Card must be selected: {self.forced_card}")
         
         self.hand_result = None
         self.contained_hand_types = {}
