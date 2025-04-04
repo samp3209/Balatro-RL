@@ -495,7 +495,7 @@ class Game:
                 non_debuffed_cards.append(card)
         
         for joker in self.inventory.jokers:
-            print(f"Applying {joker.name} effect...")
+            #print(f"Applying {joker.name} effect...")
             effect = joker.calculate_effect(
                 non_debuffed_cards, 
                 self.hands_discarded, 
@@ -513,8 +513,8 @@ class Game:
             
             money_gained += effect.money
             
-            print(f"  • {joker.name}: +{effect.mult_add} mult, x{effect.mult_mult} mult, +{effect.chips} chips, +${effect.money}")
-            print(f"  • Result: {old_mult} → {total_mult} mult, {base_chips} chips")
+            #print(f"  • {joker.name}: +{effect.mult_add} mult, x{effect.mult_mult} mult, +{effect.chips} chips, +${effect.money}")
+            #print(f"  • Result: {old_mult} → {total_mult} mult, {base_chips} chips")
 
         if count_all_played:
             base_mult, base_chips = self.inventory.calculate_hand_value(hand_type, {

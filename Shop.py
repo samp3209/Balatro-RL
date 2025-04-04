@@ -477,17 +477,16 @@ class AnteShops:
                 )
         
         return shop_items
-
+    
 class FixedShop(Shop):
     """Extension of the Shop class that uses predefined items from AnteShops"""
     
     def __init__(self, ante_number: int, shop_type: str):
-        super().__init__()
         self.ante_shops = AnteShops()
         self.ante_number = ante_number
         self.shop_type = shop_type
         
-        self._initialize_fixed_shop()
+        super().__init__()
     
     def _initialize_fixed_shop(self):
         """Initialize shop with predefined items from AnteShops"""
@@ -505,7 +504,7 @@ class FixedShop(Shop):
     def reroll(self, inventory):
         """Override to disable rerolling in fixed shops"""
         return False
-
+    
 def initialize_shops_for_game():
     all_shops = {}
     

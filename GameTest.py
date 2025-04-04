@@ -7,6 +7,7 @@ from Game import Game
 from HandEvaluator import *
 from GameManager import GameManager
 from JokerCreation import create_joker
+from Shop import Shop, ShopItem, ShopItemType, initialize_shops_for_game, FixedShop
 
 def print_card(card: Card) -> str:
     """Format a card as a string for display"""
@@ -59,29 +60,352 @@ def print_hand(cards: List[Card], title: str = "Current Hand"):
         print(f"{i}: {print_card(card)}{status}")
     print()
 
+def print_jokers(jokers, title: str = "Jokers"):
+    """Print a formatted display of jokers"""
+    print(f"\n=== {title} ===")
+    for i, joker in enumerate(jokers):
+        print(f"{i}: {joker.name} (${joker.sell_value})")
+    print()
+
+def print_shop_items(shop):
+    """Print the items available in the shop"""
+    print("\n=== SHOP ===")
+    for i, item in enumerate(shop.items):
+        if item is not None:
+            item_type = item.item_type.name
+            
+            if item.item_type == ShopItemType.JOKER and hasattr(item.item, 'name'):
+                item_name = item.item.name
+            elif item.item_type in [ShopItemType.TAROT, ShopItemType.PLANET] and hasattr(item.item, 'name'):
+                item_name = item.item.name
+            else:
+                item_name = str(item.item) if item.item is not None else "Unknown"
+                
+            price = shop.get_item_price(i)
+            print(f"{i}: {item_name} ({item_type}) - ${price}")
+        else:
+            print(f"{i}: [Empty]")
+    print()
+
+
+def get_shop_item_contents(shop_item):
+    """
+    Extract contents directly from a shop item if available
+    
+    Args:
+        shop_item: The shop item object
+        
+    Returns:
+        list: Contents of the item if it's a booster pack, otherwise None
+    """
+    if shop_item.item_type == ShopItemType.BOOSTER:
+        pack_type = str(shop_item.item)
+        
+        if hasattr(shop_item, 'contents'):
+            return shop_item.contents
+            
+        return get_pack_contents(pack_type)
+        
+    return None
+
+
+
+def handle_shop_interaction(game_manager, shop):
+    """Handle player interaction with the shop"""
+    inventory = game_manager.game.inventory
+    print(f"Money: ${inventory.money}")
+    print_shop_items(shop)
+    
+    if inventory.jokers:
+        print_jokers(inventory.jokers)
+        
+    while True:
+        joker_count = len(inventory.jokers)
+        
+        bought_item = False
+        if joker_count < 5:
+            for i, item in enumerate(shop.items):
+                if item is not None and item.item_type == ShopItemType.JOKER:
+                    price = shop.get_item_price(i)
+                    if inventory.money >= price and hasattr(item.item, 'name'):
+                        success = shop.buy_item(i, inventory)
+                        if success:
+                            print(f"Bought {item.item.name} for ${price}")
+                            bought_item = True
+                            break
+        
+        if not bought_item:
+            for i, item in enumerate(shop.items):
+                if item is not None:
+                    price = shop.get_item_price(i)
+                    if inventory.money >= price:
+                        try:
+                            if item.item_type == ShopItemType.BOOSTER:
+                                pack_type = str(item.item)
+                                
+                                pack_contents = get_shop_item_contents(item)
+                                
+                                success = shop.buy_item(i, inventory)
+                                if success:
+                                    print(f"Bought {pack_type} for ${price}")
+                                    result_message = handle_pack_opening(pack_type, pack_contents, inventory)
+                                    print(result_message)
+                                    bought_item = True
+                                    break
+                            else:
+                                item_name = item.get_name() if hasattr(item, 'get_name') else "Item"
+                                success = shop.buy_item(i, inventory)
+                                if success:
+                                    print(f"Bought {item_name} for ${price}")
+                                    bought_item = True
+                                    break
+                        except (AttributeError, TypeError) as e:
+                            print(f"Error buying item: {e}")
+                            continue
+        
+        if not bought_item and joker_count > 3 and random.random() < 0.3:
+            if inventory.jokers:
+                min_value_idx = min(range(len(inventory.jokers)), 
+                                    key=lambda i: inventory.jokers[i].sell_value)
+                joker_name = inventory.jokers[min_value_idx].name
+                sell_value = shop.sell_item("joker", min_value_idx, inventory)
+                print(f"Sold {joker_name} for ${sell_value}")
+        
+        break
+    
+    print("\nLeaving shop...")
+    print(f"Money: ${inventory.money}")
+    print(f"Jokers: {[j.name for j in inventory.jokers]}")
+    print(f"Consumables: {len(inventory.consumables)}")
+
+def get_pack_contents(pack_type):
+    pack_enum = None
+    for pt in PackType:
+        if pt.value == pack_type:
+            pack_enum = pt
+            break
+    
+    from Shop import AnteShops
+    ante_shops = AnteShops()
+    
+    for ante_num in range(1, 9):
+        if ante_num not in ante_shops.ante_shops:
+            continue
+            
+        for blind_type in ["small_blind", "medium_blind", "boss_blind"]:
+            if blind_type not in ante_shops.ante_shops[ante_num]:
+                continue
+                
+            shop_items = ante_shops.ante_shops[ante_num][blind_type]
+            
+            for item in shop_items:
+                if item.get("item_type") == ShopItemType.BOOSTER and item.get("pack_type") == pack_enum:
+                    if "contents" in item:
+                        return item["contents"]
+
+
+
+def get_shop_for_current_ante(game_manager, all_shops):
+    """Get the appropriate shop for the current ante and blind"""
+    current_ante = game_manager.game.current_ante
+    ante_number = ((current_ante - 1) // 3) + 1
+    
+    blind_type_map = {
+        0: "boss_blind",
+        1: "small_blind", 
+        2: "medium_blind"
+    }
+    
+    blind_type = blind_type_map[current_ante % 3]
+    
+    if ante_number in all_shops and blind_type in all_shops[ante_number]:
+        return all_shops[ante_number][blind_type]
+    
+    return Shop()
+
+def handle_pack_opening(pack_type, pack_contents, inventory):
+    """
+    Handle opening a booster pack and selecting items from it
+    
+    Args:
+        pack_type (str): The type of pack (Standard, Celestial, Arcana, etc.)
+        pack_contents (list): List of items in the pack
+        inventory: The game inventory to add items to
+        
+    Returns:
+        str: Message about what happened with the pack
+    """
+    from JokerCreation import create_joker
+    from Tarot import create_tarot_by_name
+    from Planet import create_planet_by_name
+    from Card import Card
+    from Enums import Suit, Rank, CardEnhancement
+    
+    print(f"\n=== Opening {pack_type} ===")
+    print("Pack contents:")
+    
+    for i, item in enumerate(pack_contents):
+        print(f"{i}: {item}")
+    
+    if "MEGA" in pack_type.upper():
+        num_to_select = 2
+    else:
+        num_to_select = 1
+    
+    message = ""
+    
+    if "STANDARD" in pack_type.upper():
+        for i in range(min(num_to_select, len(pack_contents))):
+            selected_idx = random.randint(0, len(pack_contents) - 1)
+            
+            try:
+                card_string = pack_contents[selected_idx]
+                
+                parts = card_string.split()
+                
+                rank_map = {"A": Rank.ACE, "2": Rank.TWO, "3": Rank.THREE, "4": Rank.FOUR, 
+                           "5": Rank.FIVE, "6": Rank.SIX, "7": Rank.SEVEN, "8": Rank.EIGHT,
+                           "9": Rank.NINE, "10": Rank.TEN, "J": Rank.JACK, "Q": Rank.QUEEN, "K": Rank.KING}
+                
+                suit_map = {"heart": Suit.HEARTS, "hearts": Suit.HEARTS, 
+                           "diamond": Suit.DIAMONDS, "diamonds": Suit.DIAMONDS,
+                           "club": Suit.CLUBS, "clubs": Suit.CLUBS,
+                           "spade": Suit.SPADES, "spades": Suit.SPADES}
+                
+                rank_str = parts[0]
+                rank = rank_map.get(rank_str)
+                if not rank:
+                    try:
+                        rank_value = int(rank_str)
+                        for r in Rank:
+                            if r.value == rank_value:
+                                rank = r
+                                break
+                    except ValueError:
+                        rank = Rank.ACE 
+
+                suit_str = parts[-1].lower()
+                suit = suit_map.get(suit_str, Suit.HEARTS)
+                
+                card = Card(suit, rank)
+                
+                enhancement_map = {
+                    "foil": CardEnhancement.FOIL,
+                    "holo": CardEnhancement.HOLO,
+                    "poly": CardEnhancement.POLY,
+                    "wild": CardEnhancement.WILD,
+                    "steel": CardEnhancement.STEEL,
+                    "glass": CardEnhancement.GLASS,
+                    "gold": CardEnhancement.GOLD,
+                    "stone": CardEnhancement.STONE,
+                    "lucky": CardEnhancement.LUCKY,
+                    "mult": CardEnhancement.MULT,
+                    "bonus": CardEnhancement.BONUS
+                }
+                
+                for part in parts[1:-1]:
+                    if part.lower() in enhancement_map:
+                        card.enhancement = enhancement_map[part.lower()]
+                
+                inventory.add_card_to_deck(card)
+                
+                message += f"Added {card_string} to deck. "
+                print(f"Selected and added {card_string} to deck")
+                
+            except Exception as e:
+                print(f"Error processing card: {e}")
+                message += f"Failed to add card: {e}. "
+    
+    elif "CELESTIAL" in pack_type.upper():
+        for i in range(min(num_to_select, len(pack_contents))):
+            selected_idx = random.randint(0, len(pack_contents) - 1)
+            planet_name = pack_contents[selected_idx]
+            
+            try:
+                planet = create_planet_by_name(planet_name)
+                if planet and hasattr(planet, 'planet_type'):
+                    planet_type = planet.planet_type
+                    current_level = inventory.planet_levels.get(planet_type, 1)
+                    inventory.planet_levels[planet_type] = current_level + 1
+                    
+                    message += f"Upgraded {planet_name} to level {current_level + 1}. "
+                    print(f"Upgraded {planet_name} to level {current_level + 1}")
+                else:
+                    message += f"Failed to process planet {planet_name}. "
+                    print(f"Failed to process planet {planet_name}")
+            except Exception as e:
+                print(f"Error processing planet: {e}")
+                message += f"Failed to upgrade planet: {e}. "
+    
+    elif "ARCANA" in pack_type.upper() or "BUFFOON" in pack_type.upper():
+        for i in range(min(num_to_select, len(pack_contents))):
+            selected_idx = random.randint(0, len(pack_contents) - 1)
+            item_name = pack_contents[selected_idx]
+            
+            try:
+                if "ARCANA" in pack_type.upper():
+                    tarot = create_tarot_by_name(item_name)
+                    if tarot and inventory.get_available_space() > 0:
+                        inventory.add_consumable(tarot)
+                        message += f"Added {item_name} tarot card to inventory. "
+                        print(f"Added {item_name} tarot card to inventory")
+                    else:
+                        message += f"Failed to add tarot {item_name} (space full or invalid). "
+                        print(f"Failed to add tarot {item_name}")
+                else:  # BUFFOON
+                    # Try to create a joker
+                    joker = create_joker(item_name)
+                    if joker and inventory.has_joker_space():
+                        inventory.add_joker(joker)
+                        message += f"Added {item_name} joker to inventory. "
+                        print(f"Added {item_name} joker to inventory")
+                    else:
+                        message += f"Failed to add joker {item_name} (space full or invalid). "
+                        print(f"Failed to add joker {item_name}")
+            except Exception as e:
+                print(f"Error processing item: {e}")
+                message += f"Failed to add item {item_name}: {e}. "
+    
+    return message
+
+
 def simulate_game():
     """Run a simulation of the game"""
     game_manager = GameManager(seed=42)
     game_manager.start_new_game()
     
-    jokers = ["Green Joker", "Mr. Bones", "Clever", "Smiley"]
+    all_shops = initialize_shops_for_game()
+    
+    jokers = ["Mr. Bones", "Clever", "Smiley"]
     for joker_name in jokers:
         joker = create_joker(joker_name)
         if joker:
             game_manager.game.inventory.add_joker(joker)
             print(f"Added {joker_name} to inventory")
     
+    game_manager.game.inventory.money = 0
+    
     print("\n===== STARTING GAME =====")
     print(f"Current Ante: {game_manager.game.current_ante}, Blind: {game_manager.game.current_blind}")
     print(f"Jokers in inventory: {[j.name for j in game_manager.game.inventory.jokers]}")
+    print(f"Money: ${game_manager.game.inventory.money}")
     
     # Game loop
-    max_rounds = 35
+    max_rounds = 10
     rounds_played = 0
-    max_loop_iterations = 100
+    max_loop_iterations = 100  # Prevent infinite loops
     loop_count = 0
+    last_ante = 0
     
     while not game_manager.game_over and rounds_played < max_rounds and loop_count < max_loop_iterations:
+        # Check if we've moved to a new ante and show shop
+        current_ante = game_manager.game.current_ante
+        if current_ante != last_ante:
+            print("\n===== SHOP PHASE =====")
+            shop = get_shop_for_current_ante(game_manager, all_shops)
+            handle_shop_interaction(game_manager, shop)
+            last_ante = current_ante
+        
         rounds_played += 1
         loop_count += 1
         
@@ -91,10 +415,10 @@ def simulate_game():
         elif game_manager.game.current_ante % 3 == 0:
             blind_type = "Boss"
             
-        current_ante = ((game_manager.game.current_ante - 1) // 3) + 1
+        current_ante_number = ((game_manager.game.current_ante - 1) // 3) + 1
         
         boss_blind_indicator = "🔥 BOSS BLIND 🔥" if blind_type == "Boss" else ""
-        print(f"\n----- Ante {current_ante}, {blind_type} Blind: {game_manager.game.current_blind} {boss_blind_indicator} -----")
+        print(f"\n----- Ante {current_ante_number}, {blind_type} Blind: {game_manager.game.current_blind} {boss_blind_indicator} -----")
         print(f"Hand {game_manager.hands_played + 1}/{game_manager.max_hands_per_round}, " + 
               f"Discards Used: {game_manager.discards_used}/{game_manager.max_discards_per_round}, " + 
               f"Score: {game_manager.current_score}/{game_manager.game.current_blind}")
@@ -102,7 +426,7 @@ def simulate_game():
         if game_manager.current_ante_beaten:
             print(f"Blind beaten! Moving to next blind.")
             game_manager.next_ante()
-            loop_count = 0
+            loop_count = 0  # Reset loop counter when advancing to next ante
             continue
             
         print_hand(game_manager.current_hand)
@@ -155,6 +479,7 @@ def simulate_game():
                         print(f"DISCARD: {message}")
                         continue
         
+        # Play the recommended cards if we have a recommendation and haven't discarded
         if recommended_indices:
             success, message = game_manager.play_cards(recommended_indices)
             print(f"PLAY: {message}")
@@ -162,14 +487,23 @@ def simulate_game():
             if game_manager.current_ante_beaten:
                 print(f"Ante beaten! Score: {game_manager.current_score}/{game_manager.game.current_blind}")
                 game_manager.next_ante()
-                loop_count = 0
+                loop_count = 0  # Reset loop counter when advancing to next ante
             continue
         else:
+            # If we have no recommendation but still have cards, try to play the best we can
             if game_manager.current_hand:
+                # Just play all cards as a last resort
                 play_indices = list(range(len(game_manager.current_hand)))
                 success, message = game_manager.play_cards(play_indices)
                 print(f"PLAY (all cards): {message}")
                 continue
+    
+    print("\n===== GAME OVER =====")
+    print(f"Final ante: {((game_manager.game.current_ante - 1) // 3) + 1}")
+    print(f"Final score: {game_manager.current_score}")
+    print(f"Final money: ${game_manager.game.inventory.money}")
+    print(f"Final jokers: {[j.name for j in game_manager.game.inventory.jokers]}")
+    print(f"Game over: {game_manager.game_over}")
 
 if __name__ == "__main__":
     simulate_game()
