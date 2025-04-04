@@ -78,9 +78,12 @@ def simulate_game():
     # Game loop
     max_rounds = 35
     rounds_played = 0
+    max_loop_iterations = 100
+    loop_count = 0
     
-    while not game_manager.game_over and rounds_played < max_rounds:
+    while not game_manager.game_over and rounds_played < max_rounds and loop_count < max_loop_iterations:
         rounds_played += 1
+        loop_count += 1
         
         blind_type = "Small"
         if game_manager.game.current_ante % 3 == 2:
@@ -99,6 +102,7 @@ def simulate_game():
         if game_manager.current_ante_beaten:
             print(f"Blind beaten! Moving to next blind.")
             game_manager.next_ante()
+            loop_count = 0
             continue
             
         print_hand(game_manager.current_hand)
@@ -134,22 +138,38 @@ def simulate_game():
                 print(f"Added forced card at index {forced_idx} to recommended play")
         
         if game_manager.discards_used < game_manager.max_discards_per_round:
-                best_hand_info = game_manager.get_best_hand_from_current()
-                if best_hand_info:
-                    best_hand, _ = best_hand_info
-                    if best_hand.value <= HandType.PAIR.value and random.random() < 0.7:
-                        discard_indices = []
-                        for i, card in enumerate(game_manager.current_hand):
-                            if card.rank.value < 10 and random.random() < 0.5:
-                                discard_indices.append(i)
+            best_hand_info = game_manager.get_best_hand_from_current()
+            if best_hand_info:
+                best_hand, _ = best_hand_info
+                if best_hand.value <= HandType.PAIR.value and random.random() < 0.7:
+                    discard_indices = []
+                    for i, card in enumerate(game_manager.current_hand):
+                        if card.rank.value < 10 and random.random() < 0.5:
+                            discard_indices.append(i)
                                 
-                        if has_forced_card and game_manager.game.forced_card_index not in discard_indices:
-                            discard_indices.append(game_manager.game.forced_card_index)
+                    if has_forced_card and game_manager.game.forced_card_index not in discard_indices:
+                        discard_indices.append(game_manager.game.forced_card_index)
                                 
-                        if discard_indices:
-                            success, message = game_manager.discard_cards(discard_indices)
-                            print(f"DISCARD: {message}")
-                            continue
+                    if discard_indices:
+                        success, message = game_manager.discard_cards(discard_indices)
+                        print(f"DISCARD: {message}")
+                        continue
+        
+        if recommended_indices:
+            success, message = game_manager.play_cards(recommended_indices)
+            print(f"PLAY: {message}")
+            
+            if game_manager.current_ante_beaten:
+                print(f"Ante beaten! Score: {game_manager.current_score}/{game_manager.game.current_blind}")
+                game_manager.next_ante()
+                loop_count = 0
+            continue
+        else:
+            if game_manager.current_hand:
+                play_indices = list(range(len(game_manager.current_hand)))
+                success, message = game_manager.play_cards(play_indices)
+                print(f"PLAY (all cards): {message}")
+                continue
 
 if __name__ == "__main__":
     simulate_game()
