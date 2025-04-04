@@ -73,7 +73,7 @@ def simulate_game():
     print(f"Jokers in inventory: {[j.name for j in game_manager.game.inventory.jokers]}")
     
     # Game loop
-    max_rounds = 30  # Safety to prevent infinite loops
+    max_rounds = 35  # Safety to prevent infinite loops
     rounds_played = 0
     
     while not game_manager.game_over and rounds_played < max_rounds:

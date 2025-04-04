@@ -4,6 +4,7 @@ from Card import Card
 from Inventory import Inventory
 from Game import Game
 from HandEvaluator import HandEvaluator
+from collections import defaultdict
 
 class GameManager:
     """
@@ -44,13 +45,7 @@ class GameManager:
         """Deal a new hand of cards from the deck"""
         # Clear any existing cards
         self.current_hand = []
-        
-        # Check if the deck is running low
-        if len(self.game.inventory.deck) < self.max_hand_size:
-            print(f"WARNING: Low card count in deck ({len(self.game.inventory.deck)}), resetting deck")
-            self.game.inventory.reset_deck(self.played_cards, self.discarded_cards, self.current_hand)
-            self.played_cards = []
-            self.discarded_cards = []
+        self.played_cards = []
         
         # Deal new cards
         self.current_hand = self.game.deal_hand(self.max_hand_size)
@@ -138,10 +133,17 @@ class GameManager:
         # If we've played all hands and still haven't beaten the ante
         if self.hands_played >= self.max_hands_per_round and not self.current_ante_beaten:
             # Check for Mr. Bones joker to possibly save the round
-            has_mr_bones = any(joker.name == "Mr. Bones" for joker in self.game.inventory.jokers)
-            if has_mr_bones and self.current_score >= (self.game.current_blind * 0.25):
+            mr_bones_index = None
+            for i, joker in enumerate(self.game.inventory.jokers):
+                if joker.name == "Mr. Bones":
+                    mr_bones_index = i
+                    break
+                    
+            if mr_bones_index is not None and self.current_score >= (self.game.current_blind * 0.25):
+                # Mr. Bones saves the day but gets removed
                 self.current_ante_beaten = True
-                message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult}) - Mr. Bones saved you!"
+                removed_joker = self.game.inventory.remove_joker(mr_bones_index)
+                message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult}) - Mr. Bones saved you and vanished!"
             else:
                 self.game_over = True
                 message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult}) - GAME OVER: Failed to beat the ante"
@@ -150,17 +152,14 @@ class GameManager:
         # Deal new hand if we still have hands left to play
         message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult})"
         self.deal_new_hand()
-        if self.hands_played < self.max_hands_per_round and not self.current_ante_beaten:
-            self.reset_hand_state()
         
         return (True, message)
 
     def reset_hand_state(self):
         """Reset the hand state for a new hand within the same ante."""
-        # Clear played cards
         self.played_cards = []
                 
-        # Return all cards to the deck
+        # Step 1: Return all cards to the deck
         for card in self.current_hand:
             card.reset_state()
             self.game.inventory.add_card_to_deck(card)
@@ -169,10 +168,8 @@ class GameManager:
         
         self.game.inventory.shuffle_deck()
         
-        # Deal a new hand
         self.current_hand = self.game.deal_hand(self.max_hand_size)
         
-        # Reset hand result
         self.hand_result = None
         self.contained_hand_types = {}
         self.scoring_cards = []
@@ -291,11 +288,28 @@ class GameManager:
         if not self.current_ante_beaten:
             return False
         
-        # Move to next ante or blind within the current ante
+        # Calculate money earned based on blind type and hands left to play
+        hands_left = self.max_hands_per_round - self.hands_played
         current_blind_in_ante = (self.game.current_ante % 3)
         if current_blind_in_ante == 0:
             current_blind_in_ante = 3
         
+        # Determine money based on blind type
+        base_money = 0
+        if current_blind_in_ante == 1:  # Small blind
+            base_money = 3
+        elif current_blind_in_ante == 2:  # Medium blind
+            base_money = 4
+        elif current_blind_in_ante == 3:  # Boss blind
+            base_money = 5
+        
+        # Add bonus for hands left to play
+        money_earned = base_money + hands_left
+        self.game.inventory.money += money_earned
+        
+        print(f"Earned ${money_earned} for beating the blind with {hands_left} hands left to play")
+        
+        # Move to next ante or blind within the current ante
         if current_blind_in_ante < 3:
             # Move to the next blind within the current ante
             self.game.current_ante += 1
@@ -429,18 +443,58 @@ class GameManager:
         self.current_score = 0
         self.current_ante_beaten = False
         
+        # Log deck status before reset
+        self._log_card_distribution("BEFORE RESET")
+        
+        # Make sure all cards are properly returned to the deck
         self.game.inventory.reset_deck(
             played_cards=self.played_cards,
             discarded_cards=self.discarded_cards,
             hand_cards=self.current_hand
         )
         
+        # Clear local card tracking AFTER reset_deck is called
         self.played_cards = []
         self.discarded_cards = []
         self.current_hand = []
         
+        # Log deck status after reset
+        self._log_card_distribution("AFTER RESET")
+        
+        # Deal a new hand from the reset deck
         self.deal_new_hand()
         
+        # Reset joker states if needed
         for joker in self.game.inventory.jokers:
             if hasattr(joker, 'reset'):
                 joker.reset()
+                
+    def _log_card_distribution(self, prefix=""):
+        """Log the distribution of cards in the deck, hand, played and discarded piles"""
+        # Count cards by rank and suit
+        rank_counts = defaultdict(int)
+        suit_counts = defaultdict(int)
+        
+        # Count cards in deck
+        deck_size = len(self.game.inventory.deck)
+        for card in self.game.inventory.deck:
+            rank_counts[card.rank.name] += 1
+            suit_counts[card.suit.name] += 1
+            
+        # Count cards in hand
+        hand_size = len(self.current_hand)
+        
+        # Count played cards
+        played_size = len(self.played_cards)
+        
+        # Count discarded cards
+        discarded_size = len(self.discarded_cards)
+        
+        # Calculate total cards
+        total_cards = deck_size + hand_size + played_size + discarded_size
+        
+        print(f"\n{prefix} CARD DISTRIBUTION:")
+        print(f"Deck: {deck_size}, Hand: {hand_size}, Played: {played_size}, Discarded: {discarded_size}")
+        print(f"Total cards: {total_cards} (should be 52)")
+        print(f"Ranks: {dict(rank_counts)}")
+        print(f"Suits: {dict(suit_counts)}")

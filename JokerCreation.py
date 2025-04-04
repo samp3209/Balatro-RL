@@ -57,6 +57,7 @@ class GreenJoker(Joker): #NEED to store global played vs discard functionality n
 class MrBonesJoker(Joker):
     def __init__(self):
         super().__init__("Mr. Bones", price=6, sell_value=3)
+        self.activated = False
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
         effect = JokerEffect()
