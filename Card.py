@@ -8,11 +8,11 @@ class Card:
         
         self.face = rank.value >= Rank.JACK.value and rank.value < Rank.ACE.value
         self.played_this_ante = False
-        self.in_deck = True
         self.in_hand = False
         self.played = False
         self.scored = False
         self.discarded = False
+        self.in_deck = True
         self.retrigger = False
     
     def apply_enhancement(self, enhancement: CardEnhancement):

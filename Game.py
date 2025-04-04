@@ -31,6 +31,13 @@ class Game:
     def deal_hand(self, count=8) -> List[Card]:
         """Deal a specified number of cards from the deck to the hand"""
         hand = []
+        
+        # Check if we have enough cards
+        if len(self.inventory.deck) < count:
+            print(f"WARNING: Not enough cards in deck ({len(self.inventory.deck)}), need to reset deck")
+            # We should reset the deck here, but since we don't track played/discarded cards
+            # at this level, we'll just print a warning. The GameManager should handle this.
+        
         for _ in range(min(count, len(self.inventory.deck))):
             card = self.inventory.deck.pop(0)
             card.in_deck = False
@@ -293,19 +300,17 @@ class Game:
         
     def reset_for_new_round(self):
         """Reset game state for a new round"""
-        # Reset cards in deck
-        for card in self.inventory.deck:
+        for card in self.inventory.deck + [c for c in self.played_cards] + [c for c in self.discarded_cards]:
             card.reset_state()
             
-        # Reset counters
         self.hands_played = 0
         self.hands_discarded = 0
         self.face_cards_discarded_count = 0
         
-        # Reset jokers that need per-round reset
         for joker in self.inventory.jokers:
             if hasattr(joker, 'reset'):
                 joker.reset()
                 
-        # Reshuffle deck
-        self.inventory.shuffle_deck()
+        self.inventory.reset_deck(self.played_cards, self.discarded_cards, [])
+        self.played_cards = []
+        self.discarded_cards = []

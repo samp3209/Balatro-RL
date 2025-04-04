@@ -44,7 +44,13 @@ class GameManager:
         """Deal a new hand of cards from the deck"""
         # Clear any existing cards
         self.current_hand = []
-        self.played_cards = []
+        
+        # Check if the deck is running low
+        if len(self.game.inventory.deck) < self.max_hand_size:
+            print(f"WARNING: Low card count in deck ({len(self.game.inventory.deck)}), resetting deck")
+            self.game.inventory.reset_deck(self.played_cards, self.discarded_cards, self.current_hand)
+            self.played_cards = []
+            self.discarded_cards = []
         
         # Deal new cards
         self.current_hand = self.game.deal_hand(self.max_hand_size)
@@ -144,14 +150,17 @@ class GameManager:
         # Deal new hand if we still have hands left to play
         message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult})"
         self.deal_new_hand()
+        if self.hands_played < self.max_hands_per_round and not self.current_ante_beaten:
+            self.reset_hand_state()
         
         return (True, message)
 
     def reset_hand_state(self):
         """Reset the hand state for a new hand within the same ante."""
+        # Clear played cards
         self.played_cards = []
                 
-        # Step 1: Return all cards to the deck
+        # Return all cards to the deck
         for card in self.current_hand:
             card.reset_state()
             self.game.inventory.add_card_to_deck(card)
@@ -160,8 +169,10 @@ class GameManager:
         
         self.game.inventory.shuffle_deck()
         
+        # Deal a new hand
         self.current_hand = self.game.deal_hand(self.max_hand_size)
         
+        # Reset hand result
         self.hand_result = None
         self.contained_hand_types = {}
         self.scoring_cards = []

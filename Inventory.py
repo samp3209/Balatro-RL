@@ -297,9 +297,23 @@ class Inventory:
             discarded_cards: Cards that were discarded
             hand_cards: Cards still in hand
         """
+        # First make sure we're not adding duplicate cards
+        card_set = set()
+        
+        # Reset state for all cards and add to deck if not already there
         for card in played_cards + discarded_cards + hand_cards:
-            card.reset_state()
-            if card not in self.deck:
+            # Create a unique identifier for the card
+            card_id = (card.rank, card.suit)
+            
+            # Only add the card if we haven't seen it before
+            if card_id not in card_set:
+                card_set.add(card_id)
+                card.reset_state()
                 self.deck.append(card)
         
+        # Check if we need to re-initialize the deck (in case cards were lost)
+        if len(self.deck) < 52:
+            print(f"WARNING: Deck has only {len(self.deck)} cards after reset, reinitializing...")
+            self.initialize_standard_deck()
+            
         self.shuffle_deck()
