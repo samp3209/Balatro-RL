@@ -122,7 +122,9 @@ class GameManager:
         hand_type, contained_hands, scoring_cards = self.hand_evaluator.evaluate_hand(self.played_cards)
         
         self.hand_evaluator.mark_scoring_cards(self.played_cards, scoring_cards)
-
+        
+        self.game._mark_scoring_cards(self.played_cards, hand_type)
+        
         retrigger_applied = False
         retrigger_msg = ""
         for joker in self.game.inventory.jokers:

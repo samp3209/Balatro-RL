@@ -18,13 +18,16 @@ class Game:
         self.hands_discarded = 0
         self.face_cards_discarded_count = 0
         
-        # Boss blind effects
+        #boss blind effects
         self.active_boss_blind_effect = None
         self.is_boss_blind = False
         self.face_down_cards = set() 
         self.forced_card_index = None 
         self.first_hand_dealt = False
         self.scored_cards_this_ante = [] 
+
+        self.played_cards = []
+        self.discarded_cards = []
 
         self.initialize_deck()
         
@@ -38,53 +41,85 @@ class Game:
         current_blind_in_ante = (self.current_ante % 3)
         if current_blind_in_ante == 0:  # Boss blind
             self.is_boss_blind = True
-            self.active_boss_blind_effect = random.choice(list(BossBlindEffect))
-            print(f"Boss blind effect activated: {self.active_boss_blind_effect.name}")
+            
+            # For the GameTest simulation, use a fixed boss blind effect instead of random
+            # This makes debugging easier and more reproducible
+            # Comment out the next line and uncomment the random choice for real gameplay
+            self.active_boss_blind_effect = BossBlindEffect.CLUB_DEBUFF
+            # self.active_boss_blind_effect = random.choice(list(BossBlindEffect))
+            
+            print(f"\n************************************")
+            print(f"* BOSS BLIND EFFECT: {self.active_boss_blind_effect.name}")
+            print(f"************************************\n")
             
             self.face_down_cards = set()
             self.forced_card_index = None
             self.first_hand_dealt = False
-            self.previous_played_cards = []
+            self.scored_cards_this_ante = []
             
+            if self.active_boss_blind_effect == BossBlindEffect.CLUB_DEBUFF:
+                print("All Club cards are debuffed (contribute no value to hands)")
+            elif self.active_boss_blind_effect == BossBlindEffect.HALVE_VALUES:
+                print("All hand base values (chips and mult) are halved")
+            elif self.active_boss_blind_effect == BossBlindEffect.FACE_CARDS_DOWN:
+                print("All face cards (J, Q, K) are dealt face down")
+            elif self.active_boss_blind_effect == BossBlindEffect.RANDOM_CARDS_DOWN:
+                print("1 in 7 cards are dealt face down")
+            elif self.active_boss_blind_effect == BossBlindEffect.DISCARD_RANDOM:
+                print("2 random cards will be discarded whenever a hand is played")
+            elif self.active_boss_blind_effect == BossBlindEffect.FIRST_HAND_DOWN:
+                print("First 8 cards dealt are face down")
+            elif self.active_boss_blind_effect == BossBlindEffect.PREVIOUS_CARDS_DEBUFF:
+                print("Cards that were played previously in this ante are debuffed")
+                self.scored_cards_this_ante = []
+            elif self.active_boss_blind_effect == BossBlindEffect.FORCE_CARD_SELECTION:
+                print("One card must be selected to be played/discarded each hand")
+                
             return self.active_boss_blind_effect
         else:
             self.is_boss_blind = False
             self.active_boss_blind_effect = None
             return None
-
+        
     def deal_hand(self, count=8) -> List[Card]:
-        """Deal a specified number of cards from the deck to the hand"""
-        hand = []
-        
-        if len(self.inventory.deck) < count:
-            print(f"WARNING: Not enough cards in deck ({len(self.inventory.deck)}), need to reset deck")
-
-        
-        for _ in range(min(count, len(self.inventory.deck))):
-            card = self.inventory.deck.pop(0)
-            card.in_deck = False
-            card.in_hand = True
-
-            if self.is_boss_blind:
-                if self.active_boss_blind_effect == BossBlindEffect.CLUB_DEBUFF and card.suit == Suit.CLUBS:
-                    card.debuffed = True
-                elif self.active_boss_blind_effect == BossBlindEffect.FACE_CARDS_DOWN and card.face:
-                    self.face_down_cards.add(id(card))
-                elif self.active_boss_blind_effect == BossBlindEffect.RANDOM_CARDS_DOWN and random.randint(1, 7) == 1:
-                    self.face_down_cards.add(id(card))
-                elif self.active_boss_blind_effect == BossBlindEffect.FIRST_HAND_DOWN and not self.first_hand_dealt:
-                    self.face_down_cards.add(id(card))
-
-            hand.append(card)
-
-        if not self.first_hand_dealt:
-            self.first_hand_dealt = True
-        
-        if self.is_boss_blind and self.active_boss_blind_effect == BossBlindEffect.FORCE_CARD_SELECTION:
-            if hand:
-                self.forced_card_index = random.randint(0, len(hand) - 1)
+            """Deal a specified number of cards from the deck to the hand"""
+            hand = []
             
-        return hand
+            if len(self.inventory.deck) < count:
+                print(f"WARNING: Not enough cards in deck ({len(self.inventory.deck)}), need to reset deck")
+
+            
+            for _ in range(min(count, len(self.inventory.deck))):
+                card = self.inventory.deck.pop(0)
+                card.in_deck = False
+                card.in_hand = True
+                card.debuffed = False
+
+                if self.is_boss_blind:
+                    if self.active_boss_blind_effect == BossBlindEffect.CLUB_DEBUFF and card.suit == Suit.CLUBS:
+                        card.debuffed = True
+                        print(f"Boss Blind CLUB_DEBUFF: {card} is debuffed")
+                    elif self.active_boss_blind_effect == BossBlindEffect.FACE_CARDS_DOWN and card.face:
+                        self.face_down_cards.add(id(card))
+                        print(f"Boss Blind FACE_CARDS_DOWN: {card} is face down")
+                    elif self.active_boss_blind_effect == BossBlindEffect.RANDOM_CARDS_DOWN and random.randint(1, 7) == 1:
+                        self.face_down_cards.add(id(card))
+                        print(f"Boss Blind RANDOM_CARDS_DOWN: {card} is face down")
+                    elif self.active_boss_blind_effect == BossBlindEffect.FIRST_HAND_DOWN and not self.first_hand_dealt:
+                        self.face_down_cards.add(id(card))
+                        print(f"Boss Blind FIRST_HAND_DOWN: {card} is face down")
+
+                hand.append(card)
+
+            if not self.first_hand_dealt:
+                self.first_hand_dealt = True
+            
+            if self.is_boss_blind and self.active_boss_blind_effect == BossBlindEffect.FORCE_CARD_SELECTION:
+                if hand:
+                    self.forced_card_index = random.randint(0, len(hand) - 1)
+                    print(f"Boss Blind FORCE_CARD_SELECTION: Card at index {self.forced_card_index} must be played/discarded")
+                
+            return hand
     
     def play_cards(self, cards: List[Card]) -> bool:
         """
@@ -100,13 +135,19 @@ class Game:
                 card.in_hand = False
                 card.played_this_ante = True
                 
-                if card.played and card.scored:
-                    card_signature = (card.rank, card.suit)
+                if self.is_boss_blind:
+                    if self.active_boss_blind_effect == BossBlindEffect.CLUB_DEBUFF and card.suit == Suit.CLUBS:
+                        card.debuffed = True
+                        print(f"Card {card} is a club - debuffed due to CLUB_DEBUFF effect!")
                     
-                    if self.is_boss_blind and self.active_boss_blind_effect == BossBlindEffect.PREVIOUS_CARDS_DEBUFF:
-                        if card_signature in self.scored_cards_this_ante:
+                    elif self.active_boss_blind_effect == BossBlindEffect.PREVIOUS_CARDS_DEBUFF:
+                        card_signature = (card.rank, card.suit)
+                        
+                        if hasattr(self, 'scored_cards_this_ante') and card_signature in self.scored_cards_this_ante:
                             card.debuffed = True
-                            print(f"Card {card} was scored previously in this ante - debuffed!")
+                            print(f"Card {card} was played previously in this ante - debuffed!")
+        
+        self.played_cards.extend(cards)
         
         return True
     
@@ -269,28 +310,85 @@ class Game:
         return (best_hand, contained_hands)
     
     def _mark_scoring_cards(self, played_cards: List[Card], hand_type: HandType):
-        """Mark cards that contribute to the scoring hand"""
-        if hand_type == HandType.HIGH_CARD:
-            highest_card = max(played_cards, key=lambda card: card.rank.value)
-            highest_card.scored = True
-            return
-            
-
-        sorted_cards = sorted(played_cards, key=lambda card: card.rank.value, reverse=True)
-        
-        if hand_type == HandType.PAIR:
-            rank_counts = {}
+            """Mark cards that contribute to the scoring hand"""
             for card in played_cards:
-                rank_counts[card.rank.value] = rank_counts.get(card.rank.value, 0) + 1
+                card.scored = False
                 
-            pair_rank = max([rank for rank, count in rank_counts.items() if count >= 2])
-            
-            for card in played_cards:
-                if card.rank.value == pair_rank:
+            if hand_type == HandType.HIGH_CARD:
+                highest_card = max(played_cards, key=lambda card: card.rank.value)
+                highest_card.scored = True
+                return
+                
+            if hand_type == HandType.PAIR or hand_type == HandType.TWO_PAIR or hand_type == HandType.THREE_OF_A_KIND or hand_type == HandType.FOUR_OF_A_KIND or hand_type == HandType.FULL_HOUSE:
+                rank_counts = {}
+                for card in played_cards:
+                    rank_counts[card.rank.value] = rank_counts.get(card.rank.value, 0) + 1
+                
+                sorted_ranks = sorted(rank_counts.items(), key=lambda x: (x[1], x[0]), reverse=True)
+                
+                if hand_type == HandType.PAIR:
+                    pair_rank = sorted_ranks[0][0]
+                    for card in played_cards:
+                        if card.rank.value == pair_rank:
+                            card.scored = True
+                            
+                elif hand_type == HandType.TWO_PAIR:
+                    first_pair_rank = sorted_ranks[0][0]
+                    second_pair_rank = sorted_ranks[1][0]
+                    for card in played_cards:
+                        if card.rank.value == first_pair_rank or card.rank.value == second_pair_rank:
+                            card.scored = True
+                            
+                elif hand_type == HandType.THREE_OF_A_KIND:
+                    three_rank = sorted_ranks[0][0]
+                    for card in played_cards:
+                        if card.rank.value == three_rank:
+                            card.scored = True
+                            
+                elif hand_type == HandType.FOUR_OF_A_KIND:
+                    four_rank = sorted_ranks[0][0]
+                    for card in played_cards:
+                        if card.rank.value == four_rank:
+                            card.scored = True
+                            
+                elif hand_type == HandType.FULL_HOUSE:
+                    three_rank = sorted_ranks[0][0]
+                    pair_rank = sorted_ranks[1][0]
+                    for card in played_cards:
+                        if card.rank.value == three_rank or card.rank.value == pair_rank:
+                            card.scored = True
+                            
+            elif hand_type == HandType.STRAIGHT or hand_type == HandType.STRAIGHT_FLUSH:
+                unique_ranks = sorted(set(card.rank.value for card in played_cards))
+                
+                # Check for A-2-3-4-5 straight
+                if set([14, 2, 3, 4, 5]).issubset(set(unique_ranks)):
+                    straight_ranks = {14, 2, 3, 4, 5}
+                    for card in played_cards:
+                        if card.rank.value in straight_ranks:
+                            card.scored = True
+                    return
+                    
+                for i in range(len(unique_ranks) - 4):
+                    if unique_ranks[i+4] - unique_ranks[i] == 4:
+                        straight_ranks = set(range(unique_ranks[i], unique_ranks[i] + 5))
+                        for card in played_cards:
+                            if card.rank.value in straight_ranks:
+                                card.scored = True
+                        return
+                        
+            elif hand_type == HandType.FLUSH:
+                suit_counts = {}
+                for card in played_cards:
+                    suit_counts[card.suit] = suit_counts.get(card.suit, 0) + 1
+                    
+                most_common_suit = max(suit_counts.items(), key=lambda x: x[1])[0]
+                
+                suit_cards = [card for card in played_cards if card.suit == most_common_suit]
+                suit_cards = sorted(suit_cards, key=lambda card: card.rank.value, reverse=True)
+                for card in suit_cards[:5]:
                     card.scored = True
-        
 
-        
     def calculate_hand_score(self, hand_type: HandType) -> Tuple[int, int]:
         """
         Calculate the score for a hand type, applying inventory bonuses and boss blind effect
@@ -298,10 +396,11 @@ class Game:
         """
         mult, chips = self.inventory.calculate_hand_value(hand_type, {
             'stake_multiplier': self.stake_multiplier,
-            'count_all_played': self.count_all_played
+            'count_all_played': getattr(self, 'count_all_played', False)
         })
         
         if self.is_boss_blind and self.active_boss_blind_effect == BossBlindEffect.HALVE_VALUES:
+            print(f"Boss Blind effect HALVE_VALUES applied: {mult} → {max(1, mult // 2)} mult, {chips} → {max(5, chips // 2)} chips")
             mult = max(1, mult // 2)
             chips = max(5, chips // 2)
             
@@ -319,10 +418,39 @@ class Game:
             'stake_multiplier': self.stake_multiplier
         })
         
+        # Apply boss blind effect to base values first, if applicable
+        if self.is_boss_blind and self.active_boss_blind_effect == BossBlindEffect.HALVE_VALUES:
+            original_mult = base_mult
+            original_chips = base_chips
+            base_mult = max(1, base_mult // 2)
+            base_chips = max(5, base_chips // 2)
+            print(f"Boss Blind HALVE_VALUES: base values reduced from {original_mult} mult, {original_chips} chips to {base_mult} mult, {base_chips} chips")
+        
         total_mult = base_mult
         money_gained = 0
         
         print(f"Base values: {base_mult} mult, {base_chips} chips")
+        
+        debuffed_cards = []
+        for card in played_cards:
+            if card.scored:
+                is_debuffed = card.debuffed
+                
+                if (self.is_boss_blind and 
+                    self.active_boss_blind_effect == BossBlindEffect.CLUB_DEBUFF and 
+                    card.suit == Suit.CLUBS):
+                    is_debuffed = True
+                    card.debuffed = True
+                
+                if (self.is_boss_blind and 
+                    self.active_boss_blind_effect == BossBlindEffect.PREVIOUS_CARDS_DEBUFF and 
+                    card.played_this_ante):
+                    is_debuffed = True
+                    card.debuffed = True
+                
+                if is_debuffed:
+                    debuffed_cards.append(card)
+                    print(f"Card {card} is debuffed - will not contribute to joker effects or scoring")
         
         count_all_played = False
         round_info = {
@@ -331,13 +459,30 @@ class Game:
             'hands_played': self.hands_played,
             'inventory': self.inventory,
             'max_discards': 4,
-            'face_cards_discarded_count': self.face_cards_discarded_count
+            'face_cards_discarded_count': self.face_cards_discarded_count,
+            'debuffed_cards': debuffed_cards
         }
+        
+        non_debuffed_cards = []
+        for card in played_cards:
+            is_debuffed = card.debuffed
+            if (self.is_boss_blind and 
+                self.active_boss_blind_effect == BossBlindEffect.CLUB_DEBUFF and 
+                card.suit == Suit.CLUBS):
+                is_debuffed = True
+            
+            if (self.is_boss_blind and 
+                self.active_boss_blind_effect == BossBlindEffect.PREVIOUS_CARDS_DEBUFF and 
+                card.played_this_ante):
+                is_debuffed = True
+                
+            if not is_debuffed:
+                non_debuffed_cards.append(card)
         
         for joker in self.inventory.jokers:
             print(f"Applying {joker.name} effect...")
             effect = joker.calculate_effect(
-                played_cards, 
+                non_debuffed_cards, 
                 self.hands_discarded, 
                 self.inventory.deck, 
                 round_info
@@ -355,7 +500,7 @@ class Game:
             
             print(f"  • {joker.name}: +{effect.mult_add} mult, x{effect.mult_mult} mult, +{effect.chips} chips, +${effect.money}")
             print(f"  • Result: {old_mult} → {total_mult} mult, {base_chips} chips")
-            
+
         if count_all_played:
             base_mult, base_chips = self.inventory.calculate_hand_value(hand_type, {
                 'stake_multiplier': self.stake_multiplier,
@@ -366,22 +511,31 @@ class Game:
         rank_chips = 0
         for card in played_cards:
             if card.scored:
-                is_debuffed = (self.is_boss_blind and 
-                              self.active_boss_blind_effect == BossBlindEffect.CLUB_DEBUFF and 
-                              card.suit == Suit.CLUBS)
+                is_debuffed = card.debuffed
+                
+                if (self.is_boss_blind and 
+                    self.active_boss_blind_effect == BossBlindEffect.CLUB_DEBUFF and 
+                    card.suit == Suit.CLUBS):
+                    is_debuffed = True
+                    card.debuffed = True
                 
                 if (self.is_boss_blind and 
                     self.active_boss_blind_effect == BossBlindEffect.PREVIOUS_CARDS_DEBUFF and 
-                    hasattr(card, 'debuffed') and card.debuffed):
+                    card.played_this_ante):
                     is_debuffed = True
-                    
-                card_value = self.calculate_rank_chip_value(card)
-                
+                    card.debuffed = True 
+
                 if is_debuffed:
-                    card_value = max(1, card_value // 2)
+                    card_value = 0
+                    print(f"  • Card {card}: +0 chips (debuffed)")
+                else:
+                    card_value = self.calculate_rank_chip_value(card)
+                    rank_chips += card_value
+                    print(f"  • Card {card}: +{card_value} chips")
                     
-                rank_chips += card_value
-                print(f"  • Card {card}: +{card_value} chips" + (" (debuffed)" if is_debuffed else ""))
+                if self.is_boss_blind and self.active_boss_blind_effect == BossBlindEffect.HALVE_VALUES and not is_debuffed:
+                    rank_chips = max(1, rank_chips // 2)
+                    print(f"  • Boss Blind HALVE_VALUES applied: halved chip value")
         
         if rank_chips > 0:
             base_chips += rank_chips
@@ -390,22 +544,28 @@ class Game:
         retrigger_chips = 0
         for card in played_cards:
             if card.retrigger and card.scored:
-                is_debuffed = (self.is_boss_blind and 
-                              self.active_boss_blind_effect == BossBlindEffect.CLUB_DEBUFF and 
-                              card.suit == Suit.CLUBS)
+                is_debuffed = card.debuffed
+                
+                if (self.is_boss_blind and 
+                    self.active_boss_blind_effect == BossBlindEffect.CLUB_DEBUFF and 
+                    card.suit == Suit.CLUBS):
+                    is_debuffed = True
                 
                 if (self.is_boss_blind and 
                     self.active_boss_blind_effect == BossBlindEffect.PREVIOUS_CARDS_DEBUFF and 
-                    hasattr(card, 'debuffed') and card.debuffed):
+                    card.played_this_ante):
                     is_debuffed = True
                 
-                card_value = self.calculate_rank_chip_value(card)
-                
                 if is_debuffed:
-                    card_value = max(1, card_value // 2)
-                    
-                retrigger_chips += card_value
-                print(f"  • Retrigger effect from {card}: +{card_value} chips" + (" (debuffed)" if is_debuffed else ""))
+                    print(f"  • Retrigger effect from {card}: +0 chips (debuffed)")
+                else:
+                    card_value = self.calculate_rank_chip_value(card)
+                    retrigger_chips += card_value
+                    print(f"  • Retrigger effect from {card}: +{card_value} chips")
+                
+                if self.is_boss_blind and self.active_boss_blind_effect == BossBlindEffect.HALVE_VALUES and not is_debuffed:
+                    retrigger_chips = max(1, retrigger_chips // 2)
+                    print("  • Boss Blind HALVE_VALUES applied: halved retrigger value")
 
         if retrigger_chips > 0:
             base_chips += retrigger_chips
@@ -415,7 +575,7 @@ class Game:
         
     def reset_for_new_round(self):
         """Reset game state for a new round"""
-        for card in self.inventory.deck + [c for c in self.played_cards] + [c for c in self.discarded_cards]:
+        for card in self.inventory.deck + self.played_cards + self.discarded_cards:
             card.reset_state()
             
         self.hands_played = 0
@@ -427,15 +587,18 @@ class Game:
                 joker.reset()
                 
         self.inventory.reset_deck(self.played_cards, self.discarded_cards, [])
+        
         self.played_cards = []
         self.discarded_cards = []
         
         self.face_down_cards = set()
         self.forced_card_index = None
         self.first_hand_dealt = False
+        self.scored_cards_this_ante = []
         
-        if self.current_ante % 3 == 1 and self.is_boss_blind == False:
-            self.ante_played_cards = []
+        if self.current_ante % 3 == 1 and not self.is_boss_blind:
+            if hasattr(self, 'ante_played_cards'):
+                self.ante_played_cards = []
         
         self.set_boss_blind_effect()
 
@@ -469,3 +632,16 @@ class Game:
             0 <= self.forced_card_index < len(hand)):
             return hand[self.forced_card_index]
         return None
+    
+    def track_scored_cards(self):
+            """Track which cards have been scored in this ante for PREVIOUS_CARDS_DEBUFF effect"""
+            if not hasattr(self, 'scored_cards_this_ante'):
+                self.scored_cards_this_ante = []
+            
+            if self.is_boss_blind and self.active_boss_blind_effect == BossBlindEffect.PREVIOUS_CARDS_DEBUFF:
+                for card in self.played_cards:
+                    if card.scored:
+                        card_signature = (card.rank, card.suit)
+                        if card_signature not in self.scored_cards_this_ante:
+                            self.scored_cards_this_ante.append(card_signature)
+                            print(f"Tracking {card} as scored in this ante")

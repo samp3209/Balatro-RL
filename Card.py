@@ -14,6 +14,7 @@ class Card:
         self.discarded = False
         self.in_deck = True
         self.retrigger = False
+        self.debuffed = False
     
     def apply_enhancement(self, enhancement: CardEnhancement):
         """
@@ -54,6 +55,7 @@ class Card:
         self.discarded = False
         self.in_deck = True
         self.retrigger = False
+        self.debuffed = False
     
     def __repr__(self):
         """
