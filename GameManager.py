@@ -49,7 +49,7 @@ class GameManager:
         effect = self.game.set_boss_blind_effect()
         if effect:
             self.boss_blind_message = f"Boss Blind Effect: {effect.name}"
-            print(self.boss_blind_message)
+            print(f"\n⚠️ {self.boss_blind_message} ⚠️\n")
             
             if effect == BossBlindEffect.DISCARD_RANDOM:
                 self.boss_blind_message += " - 2 random cards will be discarded per hand played"
@@ -107,6 +107,13 @@ class GameManager:
         if self.hands_played >= self.max_hands_per_round:
             return (False, "Already played maximum number of hands for this round")
             
+        if (self.game.is_boss_blind and 
+            self.game.active_boss_blind_effect == BossBlindEffect.FORCE_CARD_SELECTION and 
+            self.game.forced_card_index is not None):
+            forced_idx = self.game.forced_card_index
+            if forced_idx not in card_indices:
+                return (False, f"Boss Blind Effect: You must include card at index {forced_idx} in your play")
+            
         cards_to_play = []
         for idx in sorted(card_indices, reverse=True):
             if 0 <= idx < len(self.current_hand):
@@ -160,6 +167,9 @@ class GameManager:
         self.game.inventory.money += money_gained
         self.hands_played += 1
         self.game.hands_played += 1
+        
+        if self.game.is_boss_blind and self.game.active_boss_blind_effect == BossBlindEffect.PREVIOUS_CARDS_DEBUFF:
+            self.game.track_scored_cards()
         
         if self.current_score >= self.game.current_blind:
             self.current_ante_beaten = True
@@ -223,6 +233,13 @@ class GameManager:
         if self.discards_used >= self.max_discards_per_round:
             return (False, "Maximum discards already used for this round")
             
+        if (self.game.is_boss_blind and 
+            self.game.active_boss_blind_effect == BossBlindEffect.FORCE_CARD_SELECTION and 
+            self.game.forced_card_index is not None):
+            forced_idx = self.game.forced_card_index
+            if forced_idx not in card_indices:
+                return (False, f"Boss Blind Effect: You must include card at index {forced_idx} in your discard")
+            
         cards_to_discard = []
         for idx in sorted(card_indices, reverse=True):
             if 0 <= idx < len(self.current_hand):
@@ -263,6 +280,14 @@ class GameManager:
         Returns:
             Tuple of (recommended_card_indices, explanation)
         """
+        forced_card = None
+        if (self.game.is_boss_blind and 
+            self.game.active_boss_blind_effect == BossBlindEffect.FORCE_CARD_SELECTION and 
+            self.game.forced_card_index is not None):
+            forced_index = self.game.forced_card_index
+            if 0 <= forced_index < len(self.current_hand):
+                forced_card = self.current_hand[forced_index]
+                print(f"Boss Blind FORCE_CARD_SELECTION: Card at index {forced_index} must be played/discarded")
 
         best_hand = self.get_best_hand_from_current()
         
@@ -279,8 +304,13 @@ class GameManager:
                     i not in indices):
                     indices.append(i)
                     break
+        
+        if forced_card and self.game.forced_card_index not in indices:
+            indices.append(self.game.forced_card_index)
                     
         explanation = f"Play {hand_type.name} for the best chance of winning"
+        if forced_card:
+            explanation += f" (including forced card at index {self.game.forced_card_index})"
         
         return (indices, explanation)
     
@@ -302,7 +332,9 @@ class GameManager:
             'discarded_cards_count': len(self.discarded_cards),
             'deck_size': len(self.game.inventory.deck),
             'joker_count': len(self.game.inventory.jokers),
-            'consumable_count': len(self.game.inventory.consumables)
+            'consumable_count': len(self.game.inventory.consumables),
+            'is_boss_blind': self.game.is_boss_blind,
+            'boss_blind_effect': self.game.active_boss_blind_effect.name if self.game.active_boss_blind_effect else "None"
         }
         
     def next_ante(self):
@@ -314,16 +346,23 @@ class GameManager:
             return False
         
         hands_left = self.max_hands_per_round - self.hands_played
-        current_blind_in_ante = (self.game.current_ante % 3)
-        if current_blind_in_ante == 0:
-            current_blind_in_ante = 3
+        
+        blind_type = "Small"
+        if self.game.current_ante % 3 == 2:
+            blind_type = "Medium"
+        elif self.game.current_ante % 3 == 0:
+            blind_type = "Boss"
+            for joker in self.game.inventory.jokers:
+                if joker.name == "Rocket" and hasattr(joker, "boss_blind_defeated"):
+                    joker.boss_blind_defeated += 1
+                    print(f"Rocket joker: Boss blind defeated counter increased to {joker.boss_blind_defeated}")
         
         base_money = 0
-        if current_blind_in_ante == 1:  # Small blind
+        if blind_type == "Small":
             base_money = 3
-        elif current_blind_in_ante == 2:  # Medium blind
+        elif blind_type == "Medium":
             base_money = 4
-        elif current_blind_in_ante == 3:  # Boss blind
+        elif blind_type == "Boss":
             base_money = 5
         
         money_earned = base_money + hands_left
@@ -331,10 +370,8 @@ class GameManager:
         
         print(f"Earned ${money_earned} for beating the blind with {hands_left} hands left to play")
         
-        if current_blind_in_ante < 3:
-            self.game.current_ante += 1
-        else:
-            self.game.current_ante += 1
+        # Increment the ante counter
+        self.game.current_ante += 1
         
         blind_progression = {
             # Ante 1
@@ -437,30 +474,24 @@ class GameManager:
         if not self.hand_result:
             return (False, "No hand has been played yet")
             
-        # Create game state dict for planet effect
         game_state = {
             'money': self.game.inventory.money,
             'stake_multiplier': self.game.stake_multiplier
         }
         
-        # Apply planet effect
         effect = self.game.inventory.use_planet(planet_index, self.hand_result, game_state)
         
         if not effect:
             return (False, "Failed to apply planet effect")
             
-        # Process the effect results
         message = effect.get('message', 'Planet card used successfully')
         
-        # Update game state based on effect
         if 'mult_bonus' in effect:
-            # Recalculate score with the new multiplier
             self.game.stake_multiplier += effect['mult_bonus']
             
         if 'chip_bonus' in effect:
             self.current_score += effect['chip_bonus']
             
-        # Check if ante is beaten after applying planet effect
         if self.current_score >= self.game.current_blind:
             self.current_ante_beaten = True
             message += f" Ante beaten! ({self.current_score}/{self.game.current_blind})"
@@ -474,54 +505,45 @@ class GameManager:
         self.current_score = 0
         self.current_ante_beaten = False
         
-        # Log deck status before reset
-        self._log_card_distribution("BEFORE RESET")
+        #self._log_card_distribution("BEFORE RESET")
         
-        # Make sure all cards are properly returned to the deck
         self.game.inventory.reset_deck(
             played_cards=self.played_cards,
             discarded_cards=self.discarded_cards,
             hand_cards=self.current_hand
         )
         
-        # Clear local card tracking AFTER reset_deck is called
         self.played_cards = []
         self.discarded_cards = []
         self.current_hand = []
         
-        # Log deck status after reset
-        self._log_card_distribution("AFTER RESET")
+        #self._log_card_distribution("AFTER RESET")
         
-        # Deal a new hand from the reset deck
         self.deal_new_hand()
         
-        # Reset joker states if needed
         for joker in self.game.inventory.jokers:
             if hasattr(joker, 'reset'):
                 joker.reset()
                 
+        # Apply boss blind effect for the new blind
+        self.apply_boss_blind_effect()
+                
     def _log_card_distribution(self, prefix=""):
         """Log the distribution of cards in the deck, hand, played and discarded piles"""
-        # Count cards by rank and suit
         rank_counts = defaultdict(int)
         suit_counts = defaultdict(int)
         
-        # Count cards in deck
         deck_size = len(self.game.inventory.deck)
         for card in self.game.inventory.deck:
             rank_counts[card.rank.name] += 1
             suit_counts[card.suit.name] += 1
             
-        # Count cards in hand
         hand_size = len(self.current_hand)
         
-        # Count played cards
         played_size = len(self.played_cards)
         
-        # Count discarded cards
         discarded_size = len(self.discarded_cards)
         
-        # Calculate total cards
         total_cards = deck_size + hand_size + played_size + discarded_size
         
         print(f"\n{prefix} CARD DISTRIBUTION:")

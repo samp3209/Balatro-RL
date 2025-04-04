@@ -38,19 +38,22 @@ class Game:
 
     def set_boss_blind_effect(self):
         """Set a random boss blind effect when a boss blind is reached"""
-        current_blind_in_ante = (self.current_ante % 3)
-        if current_blind_in_ante == 0:  # Boss blind
+        # Boss blinds occur every third blind (i.e., when ante % 3 == 0)
+        is_boss_blind = (self.current_ante % 3 == 0)
+        
+        if is_boss_blind:
             self.is_boss_blind = True
             
-            # For the GameTest simulation, use a fixed boss blind effect instead of random
-            # This makes debugging easier and more reproducible
-            # Comment out the next line and uncomment the random choice for real gameplay
-            self.active_boss_blind_effect = BossBlindEffect.CLUB_DEBUFF
-            # self.active_boss_blind_effect = random.choice(list(BossBlindEffect))
+            # For the GameTest simulation, we'll now rotate through boss blind effects
+            # rather than always using the same one for better testing
+            boss_effects = list(BossBlindEffect)
+            effect_index = (self.current_ante // 3 - 1) % len(boss_effects)
+            self.active_boss_blind_effect = boss_effects[effect_index]
             
-            print(f"\n************************************")
-            print(f"* BOSS BLIND EFFECT: {self.active_boss_blind_effect.name}")
-            print(f"************************************\n")
+            # Print a highly visible message about the boss blind effect
+            print(f"\n==================================================")
+            print(f"🔥 BOSS BLIND ACTIVE: {self.active_boss_blind_effect.name} 🔥")
+            print(f"==================================================\n")
             
             self.face_down_cards = set()
             self.forced_card_index = None
@@ -149,6 +152,14 @@ class Game:
         
         self.played_cards.extend(cards)
         
+        # Apply the DISCARD_RANDOM boss blind effect after playing cards
+        if self.is_boss_blind and self.active_boss_blind_effect == BossBlindEffect.DISCARD_RANDOM:
+            discarded = self.discard_random_cards(2)
+            if discarded:
+                print(f"Boss Blind DISCARD_RANDOM: Discarded {len(discarded)} random cards")
+                for card in discarded:
+                    print(f"  - Discarded {card}")
+        
         return True
     
     def discard_cards(self, cards: List[Card]) -> bool:
@@ -168,7 +179,11 @@ class Game:
                     self.face_cards_discarded_count += 1
         
         if self.is_boss_blind and self.active_boss_blind_effect == BossBlindEffect.DISCARD_RANDOM:
-            self.discard_random_cards(2)
+            discarded = self.discard_random_cards(2)
+            if discarded:
+                print(f"Boss Blind DISCARD_RANDOM: Discarded {len(discarded)} random cards after user discard")
+                for card in discarded:
+                    print(f"  - Discarded {card}")
                 
         self.hands_discarded += 1
 
@@ -295,7 +310,7 @@ class Game:
         elif contained_hands["full_house"]:
             best_hand = HandType.FULL_HOUSE
         elif contained_hands["flush"]:
-            best_hand = HandType.STRAIGHT
+            best_hand = HandType.FLUSH
         elif contained_hands["straight"]:
             best_hand = HandType.STRAIGHT
         elif contained_hands["three_of_kind"]:
