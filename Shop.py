@@ -521,14 +521,39 @@ def parse_card(card_string: str) -> Card:
     """Parse card string like '3 glass heart' into a Card object with enhancements"""
     parts = card_string.split()
     
-    rank_map = {"A": 1, "J": 11, "Q": 12, "K": 13}
-    if parts[0] in rank_map:
-        rank = rank_map[parts[0]]
-    else:
+    # Map string rank to Rank enum
+    rank_map = {
+        "A": Rank.ACE, 
+        "2": Rank.TWO,
+        "3": Rank.THREE,
+        "4": Rank.FOUR,
+        "5": Rank.FIVE,
+        "6": Rank.SIX,
+        "7": Rank.SEVEN,
+        "8": Rank.EIGHT,
+        "9": Rank.NINE,
+        "10": Rank.TEN,
+        "J": Rank.JACK, 
+        "Q": Rank.QUEEN, 
+        "K": Rank.KING
+    }
+    
+    rank_str = parts[0]
+    rank = rank_map.get(rank_str)
+    
+    if rank is None:
         try:
-            rank = int(parts[0])
+            rank_value = int(rank_str)
+            for r in Rank:
+                if r.value == rank_value:
+                    rank = r
+                    break
+            if rank is None:
+                print(f"WARNING: Invalid rank '{rank_str}', defaulting to ACE")
+                rank = Rank.ACE
         except ValueError:
-            rank = 1
+            print(f"WARNING: Could not parse rank '{rank_str}', defaulting to ACE")
+            rank = Rank.ACE
     
     suit_part = parts[-1].lower()
     suit_map = {
@@ -542,8 +567,10 @@ def parse_card(card_string: str) -> Card:
         "spades": Suit.SPADES
     }
     suit = suit_map.get(suit_part, Suit.HEARTS)
+    if suit_part not in suit_map:
+        print(f"WARNING: Invalid suit '{suit_part}', defaulting to HEARTS")
     
-    card = Card(rank, suit)
+    card = Card(suit, rank)
     
     for part in parts[1:-1]:
         part = part.lower()

@@ -175,8 +175,12 @@ class Game:
         cards_to_remove = []
         
         for card in self.inventory.deck:
-            if card.enhancement == CardEnhancement.GLASS and not card.in_deck:
+            if card.enhancement == CardEnhancement.GLASS and card.check_glass_break():
                 cards_to_remove.append(card)
+                
+                for master_card in list(self.inventory.master_deck):
+                    if master_card is card:
+                        self.inventory.master_deck.remove(master_card)
         
         for card in cards_to_remove:
             if card in self.inventory.deck:
@@ -659,33 +663,42 @@ class Game:
         
     def reset_for_new_round(self):
         """Reset game state for a new round with special handling for enhanced cards"""
+        # Handle special cases for enhanced cards BEFORE resetting the deck
         self.handle_enhanced_deck_reset()
         
+        # Reset state for all cards
         for card in self.inventory.deck + self.played_cards + self.discarded_cards:
             card.reset_state()
             
+        # Reset counters
         self.hands_played = 0
         self.hands_discarded = 0
         self.face_cards_discarded_count = 0
         
+        # Reset jokers if they have a reset method
         for joker in self.inventory.jokers:
             if hasattr(joker, 'reset'):
                 joker.reset()
-                
+        
+        # Reset the deck using our new master_deck tracking approach
         self.inventory.reset_deck(self.played_cards, self.discarded_cards, [])
         
+        # Clear played and discarded cards
         self.played_cards = []
         self.discarded_cards = []
         
+        # Reset boss blind related variables
         self.face_down_cards = set()
         self.forced_card_index = None
         self.first_hand_dealt = False
         self.scored_cards_this_ante = []
         
+        # Reset ante-specific tracking
         if self.current_ante % 3 == 1 and not self.is_boss_blind:
             if hasattr(self, 'ante_played_cards'):
                 self.ante_played_cards = []
         
+        # Set boss blind effect for the new round
         self.set_boss_blind_effect()
 
     def calculate_rank_chip_value(self, card: Card) -> int:

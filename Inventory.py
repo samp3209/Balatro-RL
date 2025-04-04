@@ -22,7 +22,8 @@ class Inventory:
     def __init__(self):
         # Core storage
         self.jokers = []  # list of jokers
-        self.deck = [] # list of cards in the current deck
+        self.deck = []  # list of cards in the current deck
+        self.master_deck = []  # master list of all cards that should be in the deck
         self.consumables = []  # max is 2, stores Consumable objects (wrappers for Tarots/Planets)
         self.max_consumables = 2
         
@@ -142,7 +143,6 @@ class Inventory:
         """Get number of available spaces in consumables."""
         return max(0, self.max_consumables - len(self.consumables))
     
-    # Planet level methods
     def get_planet_level(self, planet_type: PlanetType) -> int:
         """Get the current level of a specific planet type."""
         return self.planet_levels.get(planet_type, 1)
@@ -218,15 +218,22 @@ class Inventory:
         return (total_mult, total_chips)
     
     def add_card_to_deck(self, card: Card) -> bool:
-        """Add a card to the deck. Returns True if successful."""
+        """Add a card to the deck and master deck. Returns True if successful."""
         self.deck.append(card)
+        # Also add to master_deck to keep track of all cards
+        self.master_deck.append(card)
         return True
     
-
     def remove_card_from_deck(self, card_index: int) -> Optional[Card]:
         """Remove a card from the deck at the given index and return it."""
         if 0 <= card_index < len(self.deck):
-            return self.deck.pop(card_index)
+            card = self.deck.pop(card_index)
+            # Also remove from master_deck if it's there
+            for i, master_card in enumerate(self.master_deck):
+                if master_card is card:
+                    self.master_deck.pop(i)
+                    break
+            return card
         return None
     
     def shuffle_deck(self):
@@ -245,22 +252,16 @@ class Inventory:
     def initialize_standard_deck(self):
         """Initialize a standard 52-card deck."""
         self.deck = []
+        self.master_deck = []  # Clear master deck too
         
         # Add cards with proper rank and suit enums
         for suit in [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]:
-            self.deck.append(Card(suit, Rank.ACE))
-            self.deck.append(Card(suit, Rank.TWO))
-            self.deck.append(Card(suit, Rank.THREE))
-            self.deck.append(Card(suit, Rank.FOUR))
-            self.deck.append(Card(suit, Rank.FIVE))
-            self.deck.append(Card(suit, Rank.SIX))
-            self.deck.append(Card(suit, Rank.SEVEN))
-            self.deck.append(Card(suit, Rank.EIGHT))
-            self.deck.append(Card(suit, Rank.NINE))
-            self.deck.append(Card(suit, Rank.TEN))
-            self.deck.append(Card(suit, Rank.JACK))
-            self.deck.append(Card(suit, Rank.QUEEN))
-            self.deck.append(Card(suit, Rank.KING))
+            for rank in [Rank.ACE, Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, 
+                         Rank.SIX, Rank.SEVEN, Rank.EIGHT, Rank.NINE, Rank.TEN, 
+                         Rank.JACK, Rank.QUEEN, Rank.KING]:
+                card = Card(suit, rank)
+                self.deck.append(card)
+                self.master_deck.append(card)  # Add to master deck too
         
         # Validate that we have exactly 52 cards
         if len(self.deck) != 52:
@@ -274,15 +275,56 @@ class Inventory:
         rank_counts = defaultdict(int)
         suit_counts = defaultdict(int)
         
-        for card in self.deck:
-            rank_counts[card.rank] += 1
-            suit_counts[card.suit] += 1
+        # Check for invalid cards
+        invalid_cards = []
+        for i, card in enumerate(self.deck):
+            try:
+                # Verify card has proper Rank and Suit objects
+                if not isinstance(card.rank, Rank):
+                    invalid_cards.append((i, f"Invalid rank type: {type(card.rank)}"))
+                elif not isinstance(card.suit, Suit):
+                    invalid_cards.append((i, f"Invalid suit type: {type(card.suit)}"))
+                else:
+                    # Count valid cards
+                    rank_counts[card.rank] += 1
+                    suit_counts[card.suit] += 1
+            except Exception as e:
+                invalid_cards.append((i, f"Exception: {str(e)}"))
         
-        print("Deck distribution:")
-        print("Ranks:", {rank.name: count for rank, count in rank_counts.items()})
-        print("Suits:", {suit.name: count for suit, count in suit_counts.items()})
+        # Print any invalid cards found
+        if invalid_cards:
+            print(f"WARNING: Found {len(invalid_cards)} invalid cards in deck:")
+            for idx, error in invalid_cards:
+                try:
+                    card = self.deck[idx]
+                    card_repr = str(card.__dict__)  # Safe way to get card contents
+                    print(f"  - Index {idx}: {card_repr} - Error: {error}")
+                except Exception as e:
+                    print(f"  - Index {idx}: <Error displaying card: {str(e)}> - Error: {error}")
+        
+        try:
+            # Print rank distribution
+            valid_ranks = {}
+            for rank, count in rank_counts.items():
+                try:
+                    valid_ranks[rank.name] = count
+                except Exception:
+                    valid_ranks[str(rank)] = count
+            print("Ranks:", valid_ranks)
+            
+            # Print suit distribution
+            valid_suits = {}
+            for suit, count in suit_counts.items():
+                try:
+                    valid_suits[suit.name] = count
+                except Exception:
+                    valid_suits[str(suit)] = count
+            print("Suits:", valid_suits)
+        except Exception as e:
+            print(f"Error printing distribution: {e}")
+        
         print(f"Total cards: {len(self.deck)}")
-
+        print(f"Master deck size: {len(self.master_deck)}")
 
     def reset_deck(self, played_cards: List[Card], discarded_cards: List[Card], hand_cards: List[Card]):
         """
@@ -293,18 +335,49 @@ class Inventory:
             discarded_cards: Cards that were discarded
             hand_cards: Cards still in hand
         """
-        card_set = set()
+        # Start with an empty deck
+        self.deck = []
         
-        for card in played_cards + discarded_cards + hand_cards:
-            card_id = (card.rank, card.suit)
-            
-            if card_id not in card_set:
-                card_set.add(card_id)
+        # Create a set to track unique cards we've added back to the deck
+        added_cards = set()
+        
+        # First add all master deck cards to the deck, resetting their state
+        for card in self.master_deck:
+            card_id = (card.rank, card.suit, id(card))
+            if card_id not in added_cards:
+                added_cards.add(card_id)
                 card.reset_state()
                 self.deck.append(card)
         
-        if len(self.deck) < 52:
-            print(f"WARNING: Deck has only {len(self.deck)} cards after reset, reinitializing...")
-            self.initialize_standard_deck()
+        # Now add any cards from played/discarded/hand that weren't in the master deck
+        for card in played_cards + discarded_cards + hand_cards:
+            card_id = (card.rank, card.suit, id(card))
+            if card_id not in added_cards:
+                # This is a new card that wasn't in our master deck, so add it
+                added_cards.add(card_id)
+                card.reset_state()
+                self.deck.append(card)
+                self.master_deck.append(card)  # Also add to master deck for future rounds
         
+        # Handle special cases like broken glass cards
+        cards_to_remove = []
+        for card in list(self.deck):
+            if card.enhancement == CardEnhancement.GLASS and not card.in_deck:
+                cards_to_remove.append(card)
+                # Also remove from master_deck
+                for master_card in list(self.master_deck):
+                    if master_card is card:
+                        self.master_deck.remove(master_card)
+        
+        for card in cards_to_remove:
+            if card in self.deck:
+                self.deck.remove(card)
+        
+        if cards_to_remove:
+            print(f"Removed {len(cards_to_remove)} broken glass cards from the deck")
+        
+        # Validate deck size
+        print(f"Reset deck: {len(self.deck)} cards in deck, {len(self.master_deck)} cards in master deck")
+        self._print_deck_distribution()
+        # Shuffle the deck
         self.shuffle_deck()

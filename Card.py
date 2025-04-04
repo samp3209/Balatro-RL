@@ -2,6 +2,12 @@ from typing import Tuple
 from Enums import *
 class Card:
     def __init__(self, suit: Suit, rank: Rank):
+        if not isinstance(suit, Suit):
+            raise TypeError(f"Expected Suit enum for suit, got {type(suit)}: {suit}")
+        
+        if not isinstance(rank, Rank):
+            raise TypeError(f"Expected Rank enum for rank, got {type(rank)}: {rank}")
+            
         self.suit = suit
         self.rank = rank
         
