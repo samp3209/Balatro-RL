@@ -17,7 +17,6 @@ class GameManager:
         self.game = Game(seed)
         self.hand_evaluator = HandEvaluator()
         
-        # Current game state
         self.current_hand = []
         self.played_cards = []
         self.discarded_cards = []
@@ -25,7 +24,6 @@ class GameManager:
         self.contained_hand_types = {}
         self.scoring_cards = []
         
-        # Counters and limits
         self.max_hand_size = 8
         self.max_hands_per_round = 4
         self.max_discards_per_round = 4
@@ -43,14 +41,11 @@ class GameManager:
         
     def deal_new_hand(self):
         """Deal a new hand of cards from the deck"""
-        # Clear any existing cards
         self.current_hand = []
         self.played_cards = []
         
-        # Deal new cards
         self.current_hand = self.game.deal_hand(self.max_hand_size)
         
-        # Reset hand result
         self.hand_result = None
         self.contained_hand_types = {}
         self.scoring_cards = []
@@ -74,7 +69,6 @@ class GameManager:
         if self.hands_played >= self.max_hands_per_round:
             return (False, "Already played maximum number of hands for this round")
             
-        # Get the selected cards
         cards_to_play = []
         for idx in sorted(card_indices, reverse=True):
             if 0 <= idx < len(self.current_hand):
@@ -83,24 +77,30 @@ class GameManager:
         if not cards_to_play:
             return (False, "No valid cards selected")
             
-        # Add to played cards
         self.played_cards.extend(cards_to_play)
         
-        # Mark cards as played in the game
         self.game.play_cards(cards_to_play)
         
-        # Evaluate the hand
         hand_type, contained_hands, scoring_cards = self.hand_evaluator.evaluate_hand(self.played_cards)
         
-        # Mark scoring cards
         self.hand_evaluator.mark_scoring_cards(self.played_cards, scoring_cards)
+
+        retrigger_applied = False
+        retrigger_msg = ""
+        for joker in self.game.inventory.jokers:
+            if joker.name == "Socks and Buskin":
+                for card in self.played_cards:
+                    if card.face and card.scored:
+                        card.retrigger = True
+                        retrigger_applied = True
         
-        # Store results
+        if retrigger_applied:
+            retrigger_msg = " (with retrigger effect)"
+        
         self.hand_result = hand_type
         self.contained_hand_types = contained_hands
         self.scoring_cards = scoring_cards
         
-        # Build round_info for joker effects
         round_info = {
             'hand_type': hand_type.name.lower(),
             'contained_hands': contained_hands,
@@ -110,29 +110,23 @@ class GameManager:
             'face_cards_discarded_count': self.game.face_cards_discarded_count
         }
         
-        # Calculate score with joker effects
         total_mult, chips, money_gained = self.game.apply_joker_effects(
             self.played_cards, hand_type, contained_hands
         )
         
-        # Calculate final score by multiplying chips by multiplier
         final_score = int(chips * total_mult)
         
-        # Update score and counters
         self.current_score += final_score
         self.game.inventory.money += money_gained
         self.hands_played += 1
         self.game.hands_played += 1
         
-        # Check if ante is beaten
         if self.current_score >= self.game.current_blind:
             self.current_ante_beaten = True
             message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult})"
             return (True, message)
         
-        # If we've played all hands and still haven't beaten the ante
         if self.hands_played >= self.max_hands_per_round and not self.current_ante_beaten:
-            # Check for Mr. Bones joker to possibly save the round
             mr_bones_index = None
             for i, joker in enumerate(self.game.inventory.jokers):
                 if joker.name == "Mr. Bones":
@@ -140,7 +134,7 @@ class GameManager:
                     break
                     
             if mr_bones_index is not None and self.current_score >= (self.game.current_blind * 0.25):
-                # Mr. Bones saves the day but gets removed
+                #Mr. Bones saves the game but gets removed
                 self.current_ante_beaten = True
                 removed_joker = self.game.inventory.remove_joker(mr_bones_index)
                 message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult}) - Mr. Bones saved you and vanished!"
@@ -148,18 +142,17 @@ class GameManager:
                 self.game_over = True
                 message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult}) - GAME OVER: Failed to beat the ante"
             return (True, message)
-        
-        # Deal new hand if we still have hands left to play
+
         message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult})"
         self.deal_new_hand()
-        
+        if retrigger_applied:
+            message += retrigger_msg
         return (True, message)
 
     def reset_hand_state(self):
         """Reset the hand state for a new hand within the same ante."""
         self.played_cards = []
                 
-        # Step 1: Return all cards to the deck
         for card in self.current_hand:
             card.reset_state()
             self.game.inventory.add_card_to_deck(card)
@@ -190,7 +183,6 @@ class GameManager:
         if self.discards_used >= self.max_discards_per_round:
             return (False, "Maximum discards already used for this round")
             
-        # Get the selected cards
         cards_to_discard = []
         for idx in sorted(card_indices, reverse=True):
             if 0 <= idx < len(self.current_hand):
@@ -199,17 +191,13 @@ class GameManager:
         if not cards_to_discard:
             return (False, "No valid cards selected")
             
-        # Add to discarded cards
         self.discarded_cards.extend(cards_to_discard)
         
-        # Mark cards as discarded in the game
         self.game.discard_cards(cards_to_discard)
         
-        # Draw replacements
         replacement_cards = self.game.deal_hand(len(cards_to_discard))
         self.current_hand.extend(replacement_cards)
         
-        # Update counter
         self.discards_used += 1
         
         return (True, f"Discarded {len(cards_to_discard)} cards and drew replacements")
@@ -224,7 +212,6 @@ class GameManager:
         if not self.current_hand:
             return None
             
-        # Use evaluate_hand instead of analyze_hand to get the 3 values needed
         hand_type, _, scoring_cards = self.hand_evaluator.evaluate_hand(self.current_hand)
         
         return (hand_type, scoring_cards)
@@ -236,8 +223,7 @@ class GameManager:
         Returns:
             Tuple of (recommended_card_indices, explanation)
         """
-        # This is a very basic recommendation that just plays the best hand
-        # A real implementation would be much more sophisticated
+
         best_hand = self.get_best_hand_from_current()
         
         if not best_hand:
@@ -245,7 +231,6 @@ class GameManager:
             
         hand_type, cards = best_hand
         
-        # Find indices of the cards in the current hand
         indices = []
         for card in cards:
             for i, hand_card in enumerate(self.current_hand):
@@ -288,13 +273,11 @@ class GameManager:
         if not self.current_ante_beaten:
             return False
         
-        # Calculate money earned based on blind type and hands left to play
         hands_left = self.max_hands_per_round - self.hands_played
         current_blind_in_ante = (self.game.current_ante % 3)
         if current_blind_in_ante == 0:
             current_blind_in_ante = 3
         
-        # Determine money based on blind type
         base_money = 0
         if current_blind_in_ante == 1:  # Small blind
             base_money = 3
@@ -303,39 +286,53 @@ class GameManager:
         elif current_blind_in_ante == 3:  # Boss blind
             base_money = 5
         
-        # Add bonus for hands left to play
         money_earned = base_money + hands_left
         self.game.inventory.money += money_earned
         
         print(f"Earned ${money_earned} for beating the blind with {hands_left} hands left to play")
         
-        # Move to next ante or blind within the current ante
         if current_blind_in_ante < 3:
-            # Move to the next blind within the current ante
             self.game.current_ante += 1
         else:
-            # Move to the first blind of the next ante
             self.game.current_ante += 1
         
-        # Set the new blind based on ante progression
         blind_progression = {
             # Ante 1
-            1: 300,   # Small blind
-            2: 450,   # Medium blind 
+            1: 300,   
+            2: 450,   
             3: 600,   # Boss blind
             # Ante 2
-            4: 800,   # Small blind
-            5: 1200,  # Medium blind
+            4: 800,   
+            5: 1200,  
             6: 1600,  # Boss blind
             # Ante 3
-            7: 2000,  # Small blind
-            8: 3000,  # Medium blind
+            7: 2000,
+            8: 3000,
             9: 4000,  # Boss blind
+            #Ante 4
+            10: 5000, 
+            11: 7500,
+            12: 10000, # Boss
+            #Ante 5
+            13: 11000,
+            14: 17500,
+            15: 22000, # Boss
+            #Ante 6
+            16: 20000,
+            17: 30000,
+            18: 40000,
+            # Ante 7
+            19: 35000,
+            20: 52500,
+            21: 70000,
+            #Ante 8
+            22: 50000,
+            23: 75000,
+            24: 100000
         }
         
         self.game.current_blind = blind_progression.get(self.game.current_ante, 5000)
         
-        # Reset for the new ante
         self.reset_for_new_round()
         
         return True
@@ -356,35 +353,29 @@ class GameManager:
         if tarot_index not in tarot_indices:
             return (False, "Invalid tarot card selected")
             
-        # Get the selected cards
         selected_cards = []
         for idx in selected_card_indices:
             if 0 <= idx < len(self.current_hand):
                 selected_cards.append(self.current_hand[idx])
                 
-        # Create game state dict for tarot effect
         game_state = {
             'money': self.game.inventory.money,
             'last_tarot_used': self.game.inventory.last_tarot,
             'last_planet_used': self.game.inventory.last_planet
         }
         
-        # Apply tarot effect
         effect = self.game.inventory.use_tarot(tarot_index, selected_cards, game_state)
         
         if not effect:
             return (False, "Failed to apply tarot effect")
             
-        # Process the effect results
         message = effect.get('message', 'Tarot card used successfully')
         
-        # Handle possible modifications to cards, money, etc.
         if 'money_gained' in effect and effect['money_gained'] > 0:
             self.game.inventory.money += effect['money_gained']
             message += f" Gained ${effect['money_gained']}."
             
-        # Handle card enhancements, deletions, etc.
-        # This would be more complex in a complete implementation
+
         
         return (True, message)
     

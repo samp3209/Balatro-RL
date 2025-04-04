@@ -1,9 +1,9 @@
 from enum import Enum, auto
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Dict
 import random
 from Card import *
-from Inventory import *
 from Enums import *
+
 
 class PlanetEffect:
     def __init__(self):
@@ -85,6 +85,31 @@ class Planet:
         
         return bonus_values.get(self.planet_type, (0, 0))
     
+    def apply_effect(self, hand_type, game_state: Dict) -> Dict:
+        """
+        Apply the planet's effect based on the hand type
+        
+        Args:
+            hand_type: The hand type being played
+            game_state: Dictionary containing game state information
+            
+        Returns:
+            Dictionary containing effect details
+        """
+        result = {
+            'message': f"Used {self.name} planet card",
+            'mult_bonus': 0,
+            'chip_bonus': 0
+        }
+        
+        mult_bonus, chip_bonus = self.get_bonus_values()
+        
+        result['mult_bonus'] = mult_bonus
+        result['chip_bonus'] = chip_bonus
+        result['message'] = f"Used {self.name} planet card: +{mult_bonus} mult, +{chip_bonus} chips"
+        
+        return result
+
 
 def create_planet(planet_type: PlanetType) -> Planet:
     """Create a planet card of the specified type"""
@@ -97,7 +122,7 @@ def create_random_planet() -> Planet:
     return create_planet(random_type)
 
 
-def create_planet_by_name(name: str) -> Planet:
+def create_planet_by_name(name: str) -> Optional[Planet]:
     """
     Create a Planet card object by name
     
@@ -109,28 +134,19 @@ def create_planet_by_name(name: str) -> Planet:
     """
     planet_name = name.lower().strip()
     
-    planet_data = {
-        "mercury": {"effect": "Discard and redraw your hand", "price": 3, "sell_value": 1},
-        "venus": {"effect": "Improve your next draw", "price": 3, "sell_value": 1},
-        "earth": {"effect": "Gain an extra hand this round", "price": 3, "sell_value": 1},
-        "mars": {"effect": "Increase stake multiplier", "price": 3, "sell_value": 1},
-        "jupiter": {"effect": "Gain extra chips", "price": 3, "sell_value": 1},
-        "saturn": {"effect": "Add a Celestial card to your hand", "price": 3, "sell_value": 1},
-        "uranus": {"effect": "Reverse the blinds order", "price": 3, "sell_value": 1},
-        "neptune": {"effect": "Play with different poker hands", "price": 3, "sell_value": 1},
-        "pluto": {"effect": "Force a specific poker hand", "price": 3, "sell_value": 1},
-        "black hole": {"effect": "Destroy a card, increase multiplier", "price": 5, "sell_value": 2}
+    planet_map = {
+        "pluto": PlanetType.PLUTO,
+        "mercury": PlanetType.MERCURY,
+        "uranus": PlanetType.URANUS,
+        "venus": PlanetType.VENUS,
+        "saturn": PlanetType.SATURN,
+        "earth": PlanetType.EARTH,
+        "mars": PlanetType.MARS,
+        "neptune": PlanetType.NEPTUNE
     }
     
-    effect = "Unknown effect"
-    price = 3
-    sell_value = 1
+    if planet_name in planet_map:
+        return create_planet(planet_map[planet_name])
     
-    if planet_name in planet_data:
-        effect = planet_data[planet_name]["effect"]
-        price = planet_data[planet_name]["price"]
-        sell_value = planet_data[planet_name]["sell_value"]
-    
-    formatted_name = " ".join(word.capitalize() for word in planet_name.split())
-    
-    return Planet(formatted_name, effect, price, sell_value)
+    print(f"Warning: Unknown planet name '{name}'")
+    return None

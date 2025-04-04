@@ -3,7 +3,7 @@ from enum import Enum, auto
 from typing import List, Optional
 from Enums import *
 import random
-from Tarot import *
+from Tarot import create_random_tarot
 
 
 
@@ -40,6 +40,7 @@ def create_joker(joker_name: str) -> Optional[Joker]:
         "Business Card": BusinessCardJoker,
         "Black Board": BlackBoardJoker,
         "Photograph": PhotographJoker,
+        "Square": SquareJoker,
     }
     
     return joker_classes.get(joker_name, lambda: None)()
@@ -48,7 +49,7 @@ class GreenJoker(Joker): #NEED to store global played vs discard functionality n
     def __init__(self):
         super().__init__("Green Joker", price=4, sell_value=2)
         
-    def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
+    def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict, Inventory=None) -> JokerEffect:
         effect = JokerEffect()
         effect.mult_add = max(0, round_info.get('hands_played', 0) - discards)
         return effect
@@ -61,8 +62,6 @@ class MrBonesJoker(Joker):
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
         effect = JokerEffect()
-        # Logic for preventing death if chips are at least 25% of required
-        # Note: This would likely need to be handled in the main game logic
         return effect
 
 class DelayedGratificationJoker(Joker):
@@ -93,7 +92,6 @@ class MadJoker(Joker): #NEED to handle flush with a two pair in it
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
 
         effect = JokerEffect()
-        # +10 mult if played hand contains a two pair
         if round_info.get('hand_type') == 'two_pair' or round_info.get('hand_type') == 'full_house':
             effect.mult_add = 10
         return effect
@@ -126,6 +124,19 @@ class MisprintJoker(Joker):
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
         effect.mult_add = random.randint(0, 23)
+        return effect
+
+class SquareJoker(Joker):
+    def __init__(self):
+        super().__init__("Square", price=4, sell_value=2)
+    
+    def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
+        effect = JokerEffect()
+        
+        if len(hand) == 4:
+            effect.chips = 4
+            effect.triggered_effects.append("Square activated: +4 chips for playing exactly 4 cards")
+            
         return effect
     
 class WrathfulJoker(Joker):
@@ -357,8 +368,6 @@ class SocksAndBuskinJoker(Joker):
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
         effect = JokerEffect()
-        # Flag all played face cards for retrigger
-        # This would require additional logic in the main game to process the retriggers
         for card in hand:
             if card.face and card.played:
                 card.retrigger = True
@@ -399,10 +408,7 @@ class SplashJoker(Joker):
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
         effect = JokerEffect()
-        # This joker's effect is to count all played cards in scoring
-        # This would likely require a flag in the round_info to indicate that all 
-        # played cards should be counted, rather than just the cards that make up the best hand
-        round_info['count_all_played_cards'] = True
+        effect.count_all_played = True
         return effect
 
 class Cloud9Joker(Joker):

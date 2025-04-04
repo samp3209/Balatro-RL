@@ -1,6 +1,5 @@
 from enum import Enum, auto
 from typing import List, Optional
-from Inventory import *
 
 
 class JokerEffect:
@@ -10,6 +9,7 @@ class JokerEffect:
         self.chips = 0
         self.money = 0
         self.triggered_effects = []
+        self.count_all_played = False
 
 
 class Joker(object):

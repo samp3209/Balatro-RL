@@ -24,7 +24,6 @@ GJtest()
 def test_walkie_talkie_joker():
     walkie_talkie = WalkieTalkieJoker()
     
-    # Scenario 1: Hand with no 10s or 4s
     hand1 = [
         Card(Suit.HEARTS, Rank.JACK),
         Card(Suit.DIAMONDS, Rank.QUEEN),
@@ -34,7 +33,6 @@ def test_walkie_talkie_joker():
     assert(effect1.chips == 0)
     assert(effect1.mult_add == 0)
     
-    # Scenario 2: Hand with multiple 10s and 4s
     hand2 = [
         Card(Suit.HEARTS, Rank.TEN),
         Card(Suit.DIAMONDS, Rank.FOUR),
@@ -54,16 +52,13 @@ test_walkie_talkie_joker()
 def test_rocket_joker():
     rocket = RocketJoker()
     
-    # Scenario 1: No boss blind defeated
     effect1 = rocket.calculate_effect([], 0, [], {})
     assert(effect1.money == 1)
     
-    # Scenario 2: One boss blind defeated
     rocket.boss_blind_defeated = 1
     effect2 = rocket.calculate_effect([], 0, [], {})
     assert(effect2.money == 3)
     
-    # Scenario 3: Multiple boss blinds defeated
     rocket.boss_blind_defeated = 3
     effect3 = rocket.calculate_effect([], 0, [], {})
     assert(effect3.money == 7)    
@@ -73,11 +68,9 @@ test_rocket_joker()
 def test_clever_joker():
     clever = CleverJoker()
     
-    # Scenario 1: Not a two pair hand
     effect1 = clever.calculate_effect([], 0, [], {'hand_type': 'high_card'})
     assert(effect1.chips ==0)
     
-    # Scenario 2: Two pair hand
     effect2 = clever.calculate_effect([], 0, [], {'hand_type': 'two_pair'})
     assert(effect2.chips == 80)
 
@@ -128,7 +121,7 @@ def test_crafty():
     crafty = CraftyJoker()
     effect1 = crafty.calculate_effect([], 0, [], {'hand_type': 'flush'})
     effect2 = crafty.calculate_effect([], 0, [], {'hand_type': 'high_card'})
-    assert(effect1.chips == 80 and effect2 == 0)
+    assert(effect1.chips == 80 and effect2.chips == 0)
 
 test_crafty()
 
@@ -138,3 +131,127 @@ def test_misprint():
     assert(0 <= effect1.mult_add <= 23)
 
 test_misprint()
+
+
+def test_square_joker():
+    square = SquareJoker()
+    
+    hand1 = [
+        Card(Suit.HEARTS, Rank.JACK),
+        Card(Suit.DIAMONDS, Rank.QUEEN),
+        Card(Suit.CLUBS, Rank.KING),
+        Card(Suit.SPADES, Rank.ACE)
+    ]
+    effect1 = square.calculate_effect(hand1, 0, [], {'hand_type': 'high_card'})
+    assert(effect1.chips == 4)
+    
+    hand2 = [
+        Card(Suit.HEARTS, Rank.JACK),
+        Card(Suit.DIAMONDS, Rank.QUEEN),
+        Card(Suit.CLUBS, Rank.KING)
+    ]
+    effect2 = square.calculate_effect(hand2, 0, [], {'hand_type': 'high_card'})
+    assert(effect2.chips == 0)
+    
+    hand3 = [
+        Card(Suit.HEARTS, Rank.JACK),
+        Card(Suit.DIAMONDS, Rank.QUEEN),
+        Card(Suit.CLUBS, Rank.KING),
+        Card(Suit.SPADES, Rank.ACE),
+        Card(Suit.HEARTS, Rank.TEN)
+    ]
+    effect3 = square.calculate_effect(hand3, 0, [], {'hand_type': 'high_card'})
+    assert(effect3.chips == 0)
+    
+
+test_square_joker()
+
+
+def test_faceless_joker():
+    faceless = FacelessJoker()
+    
+    round_info = {'face_cards_discarded_count': 0}
+    effect1 = faceless.calculate_effect([], 0, [], round_info)
+    assert effect1.money == 0, f"Expected 0 money, got {effect1.money}"
+    
+    round_info = {'face_cards_discarded_count': 2}
+    effect2 = faceless.calculate_effect([], 0, [], round_info)
+    assert effect2.money == 0, f"Expected 0 money, got {effect2.money}"
+    
+    round_info = {'face_cards_discarded_count': 3}
+    effect3 = faceless.calculate_effect([], 0, [], round_info)
+    assert effect3.money == 6, f"Expected 6 money, got {effect3.money}"
+    
+    round_info = {'face_cards_discarded_count': 5}
+    effect4 = faceless.calculate_effect([], 0, [], round_info)
+    assert effect4.money == 6, f"Expected 6 money, got {effect4.money}"
+    
+test_faceless_joker()
+
+def test_socks_buskin_retrigger():
+    """Test the Socks and Buskin joker's retrigger effect"""
+    from Card import Card
+    from Enums import Suit, Rank, CardEnhancement, HandType
+    from JokerCreation import SocksAndBuskinJoker
+    from GameManager import GameManager
+    
+    gm = GameManager(seed=42)
+    gm.start_new_game()
+    
+    socks_joker = SocksAndBuskinJoker()
+    gm.game.inventory.add_joker(socks_joker)
+    
+    test_hand = [
+        Card(Suit.HEARTS, Rank.JACK),
+        Card(Suit.DIAMONDS, Rank.QUEEN),
+        Card(Suit.CLUBS, Rank.KING),
+        Card(Suit.SPADES, Rank.ACE),
+        Card(Suit.HEARTS, Rank.TEN)
+    ]
+    
+    gm.current_hand = []
+    for card in test_hand:
+        card.in_hand = True
+        card.in_deck = False
+        gm.current_hand.append(card)
+    
+    indices = list(range(len(gm.current_hand)))
+    success, message = gm.play_cards(indices)
+    
+    print(f"Play result: {success}, {message}")
+    print(f"Score: {gm.current_score}")
+    
+    retriggered_cards = [card for card in gm.played_cards if card.retrigger]
+    print(f"Retriggered cards: {[str(card) for card in retriggered_cards]}")
+    
+    face_card_count = sum(1 for card in gm.played_cards if card.face)
+    retrigger_count = len(retriggered_cards)
+    
+    assert retrigger_count == face_card_count, \
+        f"Expected {face_card_count} retriggered cards, got {retrigger_count}"
+    
+    expected_rank_value = 0
+    for card in gm.played_cards:
+        if card.scored:
+            if card.rank == Rank.ACE:
+                expected_rank_value += 11
+            elif card.face:
+                expected_rank_value += 10
+            else:
+                expected_rank_value += card.rank.value
+    
+    expected_retrigger_value = 0
+    for card in gm.played_cards:
+        if card.retrigger and card.scored:
+            if card.face:
+                expected_retrigger_value += 10
+            elif card.rank == Rank.ACE:
+                expected_retrigger_value += 11
+            else:
+                expected_retrigger_value += card.rank.value
+    
+    print(f"Expected rank value contribution: {expected_rank_value}")
+    print(f"Expected retrigger value contribution: {expected_retrigger_value}")
+    print("Test passed! Socks and Buskin joker correctly marked face cards for retrigger.")
+    
+test_socks_buskin_retrigger()

@@ -1,22 +1,18 @@
 from collections import defaultdict
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Any
 from Card import *
 from Hand import *
-from Joker import *
-from JokerCreation import *
-from Planet import *
-from Tarot import *
 from Enums import *  # Make sure ConsumableType is defined here
 import random
 
 
 class Consumable:
     """Wrapper class to store either a Tarot or Planet in the consumables list"""
-    def __init__(self, item: Union[Tarot, Planet]):
+    def __init__(self, item: Any):
         self.item = item
-        if isinstance(item, Tarot):
+        if hasattr(item, 'tarot_type'):  # Check if it's a Tarot
             self.type = ConsumableType.TAROT
-        elif isinstance(item, Planet):
+        elif hasattr(item, 'planet_type'):  # Check if it's a Planet
             self.type = ConsumableType.PLANET
         else:
             raise ValueError("Consumable must be either a Tarot or Planet")
@@ -54,7 +50,7 @@ class Inventory:
             PlanetType.NEPTUNE: 1   # default 8 mult x 100 chips
         }
 
-    def add_joker(self, joker: Joker) -> bool:
+    def add_joker(self, joker) -> bool:
         """Add a joker to inventory. Returns True if successful."""
         self.jokers.append(joker)
         self.joker_sell_values.append(joker.sell_value)
@@ -79,7 +75,7 @@ class Inventory:
             return False
         return True 
     
-    def add_consumable(self, item: Union[Tarot, Planet]) -> bool:
+    def add_consumable(self, item) -> bool:
         """Add a Tarot or Planet card to consumables. Returns True if successful."""
         if len(self.consumables) >= self.max_consumables:
             return False
@@ -88,14 +84,14 @@ class Inventory:
         self.consumables.append(consumable)
         return True
     
-    def remove_consumable(self, index: int) -> Optional[Union[Tarot, Planet]]:
+    def remove_consumable(self, index: int):
         """Remove consumable at given index and return the item."""
         if 0 <= index < len(self.consumables):
             consumable = self.consumables.pop(index)
             return consumable.item
         return None
     
-    def use_tarot(self, index: int, selected_cards, game_state: dict) -> Optional[dict]:
+    def use_tarot(self, index: int, selected_cards, game_state: dict):
         """Use a tarot card from consumables and return its effect."""
         if 0 <= index < len(self.consumables):
             consumable = self.consumables[index]
@@ -111,7 +107,7 @@ class Inventory:
                 return effect
         return None
     
-    def use_planet(self, index: int, hand_type, game_state: dict) -> Optional[dict]:
+    def use_planet(self, index: int, hand_type, game_state: dict):
         """Use a planet card from consumables and return its effect."""
         if 0 <= index < len(self.consumables):
             consumable = self.consumables[index]
@@ -315,5 +311,5 @@ class Inventory:
         if len(self.deck) < 52:
             print(f"WARNING: Deck has only {len(self.deck)} cards after reset, reinitializing...")
             self.initialize_standard_deck()
-            
+        
         self.shuffle_deck()
