@@ -445,11 +445,11 @@ class GameManager:
         if not effect:
             return (False, "Failed to apply tarot effect")
             
-        message = effect.get('message', 'Tarot card used successfully')
-        
-        if 'money_gained' in effect and effect['money_gained'] > 0:
-            self.game.inventory.money += effect['money_gained']
-            message += f" Gained ${effect['money_gained']}."
+        message = effect.message if hasattr(effect, 'message') else 'Tarot card used successfully'
+
+        if hasattr(effect, 'money_gained') and effect.money_gained > 0:
+            self.game.inventory.money += effect.money_gained
+            message += f" Gained ${effect.money_gained}."
             
 
         

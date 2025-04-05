@@ -88,6 +88,16 @@ def print_shop_items(shop):
     print()
 
 
+def print_planet_levels(inventory):
+    """Print the current level of each planet type"""
+    print("\n=== Planet Levels ===")
+    for planet_type, level in sorted(inventory.planet_levels.items(), key=lambda x: x[0].name):
+        mult_bonus, chip_bonus = inventory.get_planet_bonus(planet_type)
+        print(f"{planet_type.name.title()}: Level {level} (+{mult_bonus} mult, +{chip_bonus} chips)")
+    print()
+
+
+
 def get_shop_item_contents(shop_item):
     """
     Extract contents directly from a shop item if available
@@ -109,20 +119,38 @@ def get_shop_item_contents(shop_item):
     return None
 
 
-
 def handle_shop_interaction(game_manager, shop):
-    """Handle player interaction with the shop"""
+    """Handle player interaction with the shop with automatic planet usage"""
     inventory = game_manager.game.inventory
     print(f"Money: ${inventory.money}")
     print_shop_items(shop)
     
+    # Print planet levels
+    print_planet_levels(inventory)
+    
     if inventory.jokers:
         print_jokers(inventory.jokers)
+    
+    # Store tarots to be used in the next round
+    pending_tarots = []
         
     while True:
         joker_count = len(inventory.jokers)
         
         bought_item = False
+        
+        if joker_count >= 5:
+            for i, item in enumerate(shop.items):
+                if item is not None and item.item_type == ShopItemType.JOKER:
+                    if random.random() < 0.5:
+                        min_value_idx = min(range(len(inventory.jokers)), 
+                                           key=lambda i: inventory.jokers[i].sell_value)
+                        joker_name = inventory.jokers[min_value_idx].name
+                        sell_value = shop.sell_item("joker", min_value_idx, inventory)
+                        print(f"Sold {joker_name} for ${sell_value} to make space for a new joker")
+                        joker_count -= 1
+                        break
+        
         if joker_count < 5:
             for i, item in enumerate(shop.items):
                 if item is not None and item.item_type == ShopItemType.JOKER:
@@ -133,6 +161,47 @@ def handle_shop_interaction(game_manager, shop):
                             print(f"Bought {item.item.name} for ${price}")
                             bought_item = True
                             break
+        
+        if not bought_item:
+            for i, item in enumerate(shop.items):
+                if (item is not None and 
+                    item.item_type == ShopItemType.PLANET and 
+                    inventory.money >= shop.get_item_price(i)):
+                    
+                    planet_name = item.item.name
+                    planet_type = item.item.planet_type
+                    price = shop.get_item_price(i)
+                    
+                    shop.items[i] = None
+                    inventory.money -= price
+                    
+                    current_level = inventory.planet_levels.get(planet_type, 1)
+                    inventory.planet_levels[planet_type] = current_level + 1
+                    
+                    print(f"Bought and used {planet_name} planet for ${price}!")
+                    print(f"Upgraded {planet_name} to level {current_level + 1}")
+                    
+                    mult_bonus, chip_bonus = inventory.get_planet_bonus(planet_type)
+                    print(f"{planet_name} now provides: +{mult_bonus} mult, +{chip_bonus} chips")
+                    
+                    bought_item = True
+                    break
+        
+        if not bought_item:
+            for i, item in enumerate(shop.items):
+                if (item is not None and 
+                    item.item_type == ShopItemType.TAROT and 
+                    inventory.money >= shop.get_item_price(i)):
+                    
+                    tarot_name = item.item.name
+                    price = shop.get_item_price(i)
+                    
+                    success = shop.buy_item(i, inventory)
+                    if success:
+                        print(f"Bought {tarot_name} tarot for ${price} (will be used in next round)")
+                        pending_tarots.append(tarot_name)
+                        bought_item = True
+                        break
         
         if not bought_item:
             for i, item in enumerate(shop.items):
@@ -163,6 +232,7 @@ def handle_shop_interaction(game_manager, shop):
                             print(f"Error buying item: {e}")
                             continue
         
+        # MODIFIED: Only sell jokers as a last resort if we didn't buy anything and have extra jokers
         if not bought_item and joker_count > 3 and random.random() < 0.3:
             if inventory.jokers:
                 min_value_idx = min(range(len(inventory.jokers)), 
@@ -177,6 +247,59 @@ def handle_shop_interaction(game_manager, shop):
     print(f"Money: ${inventory.money}")
     print(f"Jokers: {[j.name for j in inventory.jokers]}")
     print(f"Consumables: {len(inventory.consumables)}")
+    
+    #print_planet_levels(inventory)
+    
+    return pending_tarots 
+
+def use_pending_tarots(game_manager, pending_tarots):
+    """
+    Use tarot cards that were purchased from the shop
+    
+    Args:
+        game_manager: The game manager instance
+        pending_tarots: List of tarot names to use
+    """
+    if not pending_tarots:
+        return
+    
+    print("\n=== Using Tarot Cards From Shop ===")
+    
+    for tarot_name in pending_tarots:
+        tarot_indices = game_manager.game.inventory.get_consumable_tarot_indices()
+        tarot_index = None
+        
+        for idx in tarot_indices:
+            consumable = game_manager.game.inventory.consumables[idx]
+            if hasattr(consumable.item, 'name') and consumable.item.name.lower() == tarot_name.lower():
+                tarot_index = idx
+                break
+        
+        if tarot_index is None:
+            print(f"Could not find tarot {tarot_name} in inventory")
+            continue
+            
+        tarot = game_manager.game.inventory.consumables[tarot_index].item
+        cards_required = tarot.selected_cards_required
+        
+        if cards_required > len(game_manager.current_hand):
+            print(f"Not enough cards to use {tarot_name}, needs {cards_required}")
+            continue
+            
+        selected_indices = []
+        
+        if cards_required > 0:
+            card_values = [(i, card.rank.value) for i, card in enumerate(game_manager.current_hand)]
+            card_values.sort(key=lambda x: x[1])
+            selected_indices = [idx for idx, _ in card_values[:cards_required]]
+        
+        success, message = game_manager.use_tarot(tarot_index, selected_indices)
+        if success:
+            print(f"Used {tarot_name}: {message}")
+        else:
+            print(f"Failed to use {tarot_name}: {message}")
+
+
 
 def get_pack_contents(pack_type):
     """
@@ -447,7 +570,8 @@ def simulate_game():
     print(f"Current Ante: {game_manager.game.current_ante}, Blind: {game_manager.game.current_blind}")
     print(f"Jokers in inventory: {[j.name for j in game_manager.game.inventory.jokers]}")
     print(f"Money: ${game_manager.game.inventory.money}")
-    
+    print_planet_levels(game_manager.game.inventory)
+
     # Game loop
     max_rounds = 30
     rounds_played = 0
@@ -455,6 +579,7 @@ def simulate_game():
     loop_count = 0
     last_ante = 0
     show_shop_next = False
+    pending_tarots = []
     
     while not game_manager.game_over and rounds_played < max_rounds and loop_count < max_loop_iterations:
         rounds_played += 1
@@ -463,8 +588,20 @@ def simulate_game():
         if show_shop_next:
             print("\n===== SHOP PHASE =====")
             shop = get_shop_for_current_ante(game_manager, all_shops)
-            handle_shop_interaction(game_manager, shop)
+            
+            new_tarots = handle_shop_interaction(game_manager, shop)
+            if new_tarots:
+                pending_tarots.extend(new_tarots)
+                
             show_shop_next = False
+            
+            if not game_manager.current_hand:
+                print("Dealing new hand for tarot usage")
+                game_manager.deal_new_hand()
+            
+            if pending_tarots and game_manager.current_hand:
+                use_pending_tarots(game_manager, pending_tarots)
+                pending_tarots = []
         
         blind_type = "Small"
         if game_manager.game.current_ante % 3 == 2:
