@@ -162,6 +162,30 @@ class GameManager:
         )
         
         final_score = int(chips * total_mult)
+
+        print("\n=== Joker Effects ===")
+        for joker in self.game.inventory.jokers:
+            effect = joker.calculate_effect(
+                self.played_cards, 
+                self.discards_used, 
+                self.game.inventory.deck, 
+                round_info
+            )
+            
+            details = []
+            if effect.mult_add > 0:
+                details.append(f"+{effect.mult_add} mult")
+            if effect.mult_mult > 1:
+                details.append(f"x{effect.mult_mult} mult")
+            if effect.chips > 0:
+                details.append(f"+{effect.chips} chips")
+            if effect.money > 0:
+                details.append(f"+${effect.money} money")
+                
+            if details:
+                print(f"{joker.name}: {', '.join(details)}")
+            else:
+                print(f"{joker.name}: No effect")
         
         self.current_score += final_score
         self.game.inventory.money += money_gained
@@ -192,7 +216,7 @@ class GameManager:
                 self.game_over = True
                 message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult}) - GAME OVER: Failed to beat the ante"
             return (True, message)
-
+        
         message = f"Played {hand_type.name} for {final_score} chips ({chips} x {total_mult})"
         self.deal_new_hand()
         if retrigger_applied:

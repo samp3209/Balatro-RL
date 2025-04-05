@@ -675,30 +675,24 @@ class Game:
         self.hands_discarded = 0
         self.face_cards_discarded_count = 0
         
-        # Reset jokers if they have a reset method
         for joker in self.inventory.jokers:
             if hasattr(joker, 'reset'):
                 joker.reset()
         
-        # Reset the deck using our new master_deck tracking approach
         self.inventory.reset_deck(self.played_cards, self.discarded_cards, [])
         
-        # Clear played and discarded cards
         self.played_cards = []
         self.discarded_cards = []
         
-        # Reset boss blind related variables
         self.face_down_cards = set()
         self.forced_card_index = None
         self.first_hand_dealt = False
         self.scored_cards_this_ante = []
         
-        # Reset ante-specific tracking
         if self.current_ante % 3 == 1 and not self.is_boss_blind:
             if hasattr(self, 'ante_played_cards'):
                 self.ante_played_cards = []
         
-        # Set boss blind effect for the new round
         self.set_boss_blind_effect()
 
     def calculate_rank_chip_value(self, card: Card) -> int:

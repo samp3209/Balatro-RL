@@ -125,13 +125,11 @@ def handle_shop_interaction(game_manager, shop):
     print(f"Money: ${inventory.money}")
     print_shop_items(shop)
     
-    # Print planet levels
     print_planet_levels(inventory)
     
     if inventory.jokers:
         print_jokers(inventory.jokers)
     
-    # Store tarots to be used in the next round
     pending_tarots = []
         
     while True:
@@ -232,7 +230,6 @@ def handle_shop_interaction(game_manager, shop):
                             print(f"Error buying item: {e}")
                             continue
         
-        # MODIFIED: Only sell jokers as a last resort if we didn't buy anything and have extra jokers
         if not bought_item and joker_count > 3 and random.random() < 0.3:
             if inventory.jokers:
                 min_value_idx = min(range(len(inventory.jokers)), 
@@ -557,14 +554,14 @@ def simulate_game():
     
     all_shops = initialize_shops_for_game()
     
-    jokers = ["Mr. Bones", "Clever", "Smiley"]
+    jokers = ["Photograph", "Square", "Smiley"]
     for joker_name in jokers:
         joker = create_joker(joker_name)
         if joker:
             game_manager.game.inventory.add_joker(joker)
             print(f"Added {joker_name} to inventory")
     
-    game_manager.game.inventory.money = 10
+    game_manager.game.inventory.money = 0 #set value higher for debugging
     
     print("\n===== STARTING GAME =====")
     print(f"Current Ante: {game_manager.game.current_ante}, Blind: {game_manager.game.current_blind}")

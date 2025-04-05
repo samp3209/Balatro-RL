@@ -10,6 +10,7 @@ class JokerEffect:
         self.money = 0
         self.triggered_effects = []
         self.count_all_played = False
+        self.description = ""
 
 
 class Joker(object):
