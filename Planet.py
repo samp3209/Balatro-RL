@@ -142,7 +142,8 @@ def create_planet_by_name(name: str) -> Optional[Planet]:
         "saturn": PlanetType.SATURN,
         "earth": PlanetType.EARTH,
         "mars": PlanetType.MARS,
-        "neptune": PlanetType.NEPTUNE
+        "neptune": PlanetType.NEPTUNE,
+        "jupiter": PlanetType.JUPITER
     }
     
     if planet_name in planet_map:

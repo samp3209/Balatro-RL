@@ -9,7 +9,7 @@ from Tarot import create_random_tarot
 
 def create_joker(joker_name: str) -> Optional[Joker]:
     joker_classes = {
-        "Green Joker": GreenJoker,
+        "Green": GreenJoker,
         "Mr. Bones": MrBonesJoker,
         "Delayed Gratification": DelayedGratificationJoker,
         "Clever": CleverJoker,
@@ -38,13 +38,17 @@ def create_joker(joker_name: str) -> Optional[Joker]:
         "Fortune Teller": FortuneTellerJoker,
         "Faceless": FacelessJoker,
         "Business Card": BusinessCardJoker,
-        "Black Board": BlackBoardJoker,
+        "Blackboard": BlackBoardJoker,
         "Photograph": PhotographJoker,
         "Square": SquareJoker,
         "Droll": Droll
     }
-    
-    return joker_classes.get(joker_name, lambda: None)()
+    joker_class = joker_classes.get(joker_name)
+    if joker_class:
+        return joker_class()
+    else:
+        print(f"Warning: Unknown joker name '{joker_name}'")
+        return None
 
 class GreenJoker(Joker): #NEED to store global played vs discard functionality not just round
     def __init__(self):

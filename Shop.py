@@ -215,7 +215,7 @@ class AnteShops:
         
         shops[1] = {
             "small_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Green Joker", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "Green", "price": 4},
                 {"item_type": ShopItemType.PLANET, "name": "Mars", "price": 3},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.BUFFOON, "price": 4, 
                  "contents": ["Mr. Bones", "Cartomancer"]},
@@ -224,7 +224,7 @@ class AnteShops:
             ],
             "medium_blind": [
                 {"item_type": ShopItemType.JOKER, "name": "Delayed Gratification", "price": 4},
-                {"item_type": ShopItemType.JOKER, "name": "Square Joker", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "Square", "price": 4},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.CELESTIAL, "price": 4, 
                  "contents": ["Saturn", "Uranus", "Pluto"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.ARCANA, "price": 4, 
@@ -251,14 +251,14 @@ class AnteShops:
             ],
             "medium_blind": [
                 {"item_type": ShopItemType.TAROT, "name": "Sun", "price": 3},
-                {"item_type": ShopItemType.JOKER, "name": "Clever Joker", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "Clever", "price": 4},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.CELESTIAL, "price": 4, 
                  "contents": ["Mercury", "Saturn", "Uranus"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.MEGA_CELESTIAL, "price": 8, 
                  "contents": ["Mercury", "Saturn", "Uranus", "Pluto", "Neptune"]}
             ],
             "boss_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Mad Joker", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "Mad", "price": 4},
                 {"item_type": ShopItemType.TAROT, "name": "Hierophant", "price": 3},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.STANDARD, "price": 4, 
                  "contents": ["K mult heart", "A wild heart", "10 club"]},
@@ -269,15 +269,15 @@ class AnteShops:
         
         shops[3] = {
             "small_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Wily Joker", "price": 4},
-                {"item_type": ShopItemType.JOKER, "name": "Smiley Joker", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "Wily", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "Smiley", "price": 4},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_CELESTIAL, "price": 6, 
                  "contents": ["Mars", "Uranus", "Venus", "Earth", "Mercury"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.CELESTIAL, "price": 4, 
                  "contents": ["Mars", "Uranus", "Venus"]}
             ],
             "medium_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Crafty Joker", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "Crafty", "price": 4},
                 {"item_type": ShopItemType.JOKER, "name": "Cloud 9", "price": 6},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_ARCANA, "price": 6, 
                  "contents": ["Strength", "Fool", "Moon", "Star", "Justice"]},
@@ -285,7 +285,7 @@ class AnteShops:
                  "contents": ["10 gold diamond", "9 holo club", "J diamond"]}
             ],
             "boss_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Splash Joker", "price": 3},
+                {"item_type": ShopItemType.JOKER, "name": "Splash", "price": 3},
                 {"item_type": ShopItemType.TAROT, "name": "Magician", "price": 3},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.ARCANA, "price": 4, 
                  "contents": ["Justice", "Hanged Man", "Moon"]},
@@ -296,7 +296,7 @@ class AnteShops:
         
         shops[4] = {
             "small_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Misprint Joker", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "Misprint", "price": 4},
                 {"item_type": ShopItemType.TAROT, "name": "Star", "price": 3},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_ARCANA, "price": 6, 
                  "contents": ["Hierophant", "Lovers", "Death", "Justice", "Sun"]},
@@ -304,7 +304,7 @@ class AnteShops:
                  "contents": ["Moon", "Wheel of Fortune", "Empress"]}
             ],
             "medium_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Wrathful Joker", "price": 5},
+                {"item_type": ShopItemType.JOKER, "name": "Wrathful", "price": 5},
                 {"item_type": ShopItemType.JOKER, "name": "Cartomancer", "price": 6},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_STANDARD, "price": 6, 
                  "contents": ["9 gold foil heart", "4 holo gold stamp diamond", "6 spade", "J bonus club", "7 glass heart"]},
@@ -312,8 +312,8 @@ class AnteShops:
                  "contents": ["Droll Joker"]}
             ],
             "boss_blind": [
-                {"item_type": ShopItemType.TAROT, "name": "Pluto", "price": 3},
-                {"item_type": ShopItemType.JOKER, "name": "Clever Joker", "price": 4},
+                {"item_type": ShopItemType.PLANET, "name": "Pluto", "price": 3},
+                {"item_type": ShopItemType.JOKER, "name": "Clever", "price": 4},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.CELESTIAL, "price": 4, 
                  "contents": ["Neptune", "Mercury", "Earth"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.ARCANA, "price": 4, 
@@ -323,15 +323,15 @@ class AnteShops:
         
         shops[5] = {
             "small_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Red Card Joker", "price": 5},
-                {"item_type": ShopItemType.JOKER, "name": "Blue Joker", "price": 5},
+                {"item_type": ShopItemType.JOKER, "name": "Red Card", "price": 5},
+                {"item_type": ShopItemType.JOKER, "name": "Blue", "price": 5},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_BUFFOON, "price": 6, 
                  "contents": ["Even Steven", "Banner", "Walkie Talkie", "Brainstorm"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.ARCANA, "price": 4, 
                  "contents": ["Tower", "Moon", "Hanged Man"]}
             ],
             "medium_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Baseball Card Joker", "price": 8},
+                {"item_type": ShopItemType.JOKER, "name": "Baseball Card", "price": 8},
                 {"item_type": ShopItemType.PLANET, "name": "Mars", "price": 3},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_STANDARD, "price": 6, 
                  "contents": ["10 gold spade", "K spade", "Q heart", "9 gold diamond", "4 gold stamp bonus spade"]},
@@ -339,8 +339,8 @@ class AnteShops:
                  "contents": ["10 gold spade", "K spade", "Q heart"]}
             ],
             "boss_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Socks and Buskin Joker", "price": 6},
-                {"item_type": ShopItemType.JOKER, "name": "8 Ball Joker", "price": 5},
+                {"item_type": ShopItemType.JOKER, "name": "Socks and Buskin", "price": 6},
+                {"item_type": ShopItemType.JOKER, "name": "8 Ball", "price": 5},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.CELESTIAL, "price": 4, 
                  "contents": ["Neptune", "Pluto", "Black Hole"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_CELESTIAL, "price": 6, 
@@ -351,7 +351,7 @@ class AnteShops:
         shops[6] = {
             "small_blind": [
                 {"item_type": ShopItemType.TAROT, "name": "Chariot", "price": 3},
-                {"item_type": ShopItemType.JOKER, "name": "Even Steven Joker", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "Even Steven", "price": 4},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.ARCANA, "price": 4, 
                  "contents": ["Tower", "World", "Fool"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.CELESTIAL, "price": 4, 
@@ -366,7 +366,7 @@ class AnteShops:
                  "contents": ["Moon", "Sun", "High Priestess"]}
             ],
             "boss_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "The Duo Joker", "price": 8},
+                {"item_type": ShopItemType.JOKER, "name": "The Duo", "price": 8},
                 {"item_type": ShopItemType.TAROT, "name": "Temperance", "price": 3},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.ARCANA, "price": 4, 
                  "contents": ["Hermit", "Star", "Death"]},
@@ -377,8 +377,8 @@ class AnteShops:
         
         shops[7] = {
             "small_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Rocket Joker", "price": 6},
-                {"item_type": ShopItemType.JOKER, "name": "Gluttonous Joker", "price": 5},
+                {"item_type": ShopItemType.JOKER, "name": "Rocket", "price": 6},
+                {"item_type": ShopItemType.JOKER, "name": "Gluttonous", "price": 5},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.STANDARD, "price": 4, 
                  "contents": ["2 heart", "3 steel club", "3 heart"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_STANDARD, "price": 6, 
@@ -394,8 +394,8 @@ class AnteShops:
                  "contents": ["2 gold heart", "J bonus diamond", "A heart"]}
             ],
             "boss_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Marble Joker", "price": 6},
-                {"item_type": ShopItemType.JOKER, "name": "Walkie Talkie Joker", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "Droll", "price": 6},
+                {"item_type": ShopItemType.JOKER, "name": "Walkie Talkie", "price": 4},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.STANDARD, "price": 4, 
                  "contents": ["10 club", "10 gold stamp heart", "A mult diamond"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_BUFFOON, "price": 6, 
@@ -406,14 +406,14 @@ class AnteShops:
         shops[8] = {
             "small_blind": [
                 {"item_type": ShopItemType.PLANET, "name": "Saturn", "price": 3},
-                {"item_type": ShopItemType.JOKER, "name": "Blackboard Joker", "price": 6},
+                {"item_type": ShopItemType.JOKER, "name": "Blackboard", "price": 6},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.ARCANA, "price": 4, 
                  "contents": ["Judgement", "Strength", "Moon"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.STANDARD, "price": 4, 
                  "contents": ["9 mult glass club", "5 glass spade", "8 club"]}
             ],
             "medium_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Photograph Joker", "price": 5},
+                {"item_type": ShopItemType.JOKER, "name": "Photograph", "price": 5},
                 {"item_type": ShopItemType.PLANET, "name": "Neptune", "price": 3},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_ARCANA, "price": 6, 
                  "contents": ["Devil", "High Priestess", "Fool", "Emperor", "Justice"]},
