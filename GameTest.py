@@ -554,14 +554,14 @@ def simulate_game():
     
     all_shops = initialize_shops_for_game()
     
-    jokers = []
+    jokers = ["Bootstraps"]
     for joker_name in jokers:
         joker = create_joker(joker_name)
         if joker:
             game_manager.game.inventory.add_joker(joker)
             print(f"Added {joker_name} to inventory")
     
-    game_manager.game.inventory.money = 0 #set value higher for debugging
+    game_manager.game.inventory.money = 100 #set value higher for debugging
     
     print("\n===== STARTING GAME =====")
     print(f"Current Ante: {game_manager.game.current_ante}, Blind: {game_manager.game.current_blind}")

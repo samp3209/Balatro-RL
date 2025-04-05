@@ -3,6 +3,8 @@ from enum import Enum, auto
 from typing import List, Optional
 from Enums import *
 import random
+from Inventory import *
+from GameManager import GameManager
 from Tarot import create_random_tarot
 
 
@@ -25,7 +27,7 @@ def create_joker(joker_name: str) -> Optional[Joker]:
         "Splash": SplashJoker,
         "Misprint": MisprintJoker,
         "Wrathful": WrathfulJoker,
-        "Red Card": RedCardJoker,
+        "Scary Face": ScaryJoker,
         "Blue": BlueJoker,
         "Even Steven": EvenSteven,
         "Banner": BannerJoker,
@@ -207,14 +209,14 @@ class RocketJoker(Joker):
         effect.money = 1 + (2 * self.boss_blind_defeated)
         return effect
     
-class RedCardJoker(Joker):
+class ScaryJoker(Joker):
     def __init__(self):
-        super().__init__("Red Card", price=5, sell_value=2)
+        super().__init__("Scary Face", price=4, sell_value=2)
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
-        skip_count = Inventory.booster_skip
-        effect.mult_add  = 4 * skip_count
+        face_count = sum(1 for card in hand if card.rank in [Rank.JACK, Rank.QUEEN, Rank.KING] and card.scored == True)
+        effect.chips = 30 * face_count
         return effect
     
 class BannerJoker(Joker):
@@ -271,9 +273,15 @@ class BaseballJoker(Joker):
     def __init__(self):
         super().__init__("BaseballJoker", price=6, sell_value=3)
 
-    def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
+    def calculate_effect(self, hand, discards, deck, round_info):
         effect = JokerEffect()
-        effect.mult_mult = 1.5 * Inventory.uncommon_joker_count
+        uncommon_count = 0
+        inventory = round_info.get('inventory') if round_info else None
+        for joker in inventory.jokers:
+            print(joker.rarity)
+        if inventory and hasattr(inventory, 'jokers'):
+            uncommon_count = sum(1 for joker in inventory.jokers if joker.rarity == "Uncommon")
+        effect.mult_mult = max(1, 1.5 * uncommon_count)
         return effect
     
 

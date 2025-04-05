@@ -154,7 +154,7 @@ class Shop:
                 "Green Joker", "Mr. Bones", "Delayed Gratification", 
                 "Clever", "Mad", "Wily", "Crafty", "Misprint",
                 "Wrathful", "Smiley", "Even Steven", "Blue",
-                "Walkie Talkie", "Rocket", "Red Card", "Banner",
+                "Walkie Talkie", "Rocket", "Scary Face", "Banner",
                 "The Duo", "Gluttonous", "Fortune Teller", "Business Card",
                 "Baseball"
             ]
@@ -323,7 +323,7 @@ class AnteShops:
         
         shops[5] = {
             "small_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "Red Card", "price": 5},
+                {"item_type": ShopItemType.JOKER, "name": "Scary Face", "price": 4},
                 {"item_type": ShopItemType.JOKER, "name": "Blue", "price": 5},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_BUFFOON, "price": 6, 
                  "contents": ["Even Steven", "Banner", "Walkie Talkie", "Brainstorm"]},
