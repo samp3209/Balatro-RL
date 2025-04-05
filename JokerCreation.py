@@ -134,14 +134,16 @@ class MisprintJoker(Joker):
 class SquareJoker(Joker):
     def __init__(self):
         super().__init__("Square", price=4, sell_value=2)
+        self.four_card_hands_played = 0
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
         
         if len(hand) == 4:
-            effect.chips = 4
-            effect.triggered_effects.append("Square activated: +4 chips for playing exactly 4 cards")
-            
+            self.four_card_hands_played += 1
+            effect.triggered_effects.append(f"Square activated: Played {self.four_card_hands_played} hands with 4 cards")
+        
+        effect.chips = 4 * self.four_card_hands_played
         return effect
     
 class WrathfulJoker(Joker):
@@ -295,17 +297,17 @@ class PhotographJoker(Joker):
         self.first_face_card_found = False
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
-
         effect = JokerEffect()
         
         for card in hand:
             if card.face and card.scored and not self.first_face_card_found:
                 effect.mult_mult = 2
                 self.first_face_card_found = True
+                print(f"Photograph joker activated on {card.rank.name} of {card.suit.name}")
                 break
-                
+                    
         return effect
-    
+        
     def reset(self):
         """Reset the joker for a new round"""
         self.first_face_card_found = False

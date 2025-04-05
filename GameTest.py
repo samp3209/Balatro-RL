@@ -554,7 +554,7 @@ def simulate_game():
     
     all_shops = initialize_shops_for_game()
     
-    jokers = ["Photograph", "Square", "Smiley"]
+    jokers = []
     for joker_name in jokers:
         joker = create_joker(joker_name)
         if joker:
@@ -570,9 +570,9 @@ def simulate_game():
     print_planet_levels(game_manager.game.inventory)
 
     # Game loop
-    max_rounds = 10
+    max_rounds = 75
     rounds_played = 0
-    max_loop_iterations = 10
+    max_loop_iterations = 75
     loop_count = 0
     last_ante = 0
     show_shop_next = False

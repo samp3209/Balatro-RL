@@ -32,6 +32,7 @@ class Planet:
             PlanetType.MERCURY: "Upgrades Pair: +1 Mult, +15 chips",
             PlanetType.URANUS: "Upgrades Two Pair: +1 Mult, +20 chips",
             PlanetType.VENUS: "Upgrades Three of a Kind: +2 Mult, +20 chips",
+            PlanetType.JUPITER: "Upgrades Flush: +2 Mult, +15 Chips",
             PlanetType.SATURN: "Upgrades Straight: +3 Mult, +30 chips",
             PlanetType.EARTH: "Upgrades Full House: +2 Mult, +15 chips",
             PlanetType.MARS: "Upgrades Four of a Kind: +3 Mult, +30 chips",
@@ -47,6 +48,7 @@ class Planet:
             PlanetType.URANUS: HandType.TWO_PAIR,
             PlanetType.VENUS: HandType.THREE_OF_A_KIND,
             PlanetType.SATURN: HandType.STRAIGHT,
+            PlanetType.JUPITER: HandType.FLUSH,
             PlanetType.EARTH: HandType.FULL_HOUSE,
             PlanetType.MARS: HandType.FOUR_OF_A_KIND,
             PlanetType.NEPTUNE: HandType.STRAIGHT_FLUSH
@@ -61,6 +63,7 @@ class Planet:
             HandType.TWO_PAIR: (2, 20),
             HandType.THREE_OF_A_KIND: (3, 30),
             HandType.STRAIGHT: (4, 30),
+            HandType.FLUSH: (4, 35),
             HandType.FULL_HOUSE: (4, 40),
             HandType.FOUR_OF_A_KIND: (7, 60),
             HandType.STRAIGHT_FLUSH: (8, 100),
@@ -78,9 +81,10 @@ class Planet:
             PlanetType.URANUS: (1, 20),    #Two Pair
             PlanetType.VENUS: (2, 20),     #Three of a Kind
             PlanetType.SATURN: (3, 30),    #Straight
-            PlanetType.EARTH: (2, 15),     #Full House
+            PlanetType.EARTH: (2, 25),     #Full House
             PlanetType.MARS: (3, 30),      #Four of a Kind
-            PlanetType.NEPTUNE: (4, 40)    #Straight Flush
+            PlanetType.NEPTUNE: (4, 40),    #Straight Flush
+            PlanetType.FLUSH: (2, 15)
         }
         
         return bonus_values.get(self.planet_type, (0, 0))
