@@ -14,9 +14,9 @@ class JokerEffect:
 
 
 class Joker(object):
-    def __init__(self, name: str, price: int, sell_value: int):
+    def __init__(self, name: str, price: int, sell_value: int, rarity: str):
         self.name = name
-        self.rarity = 'base'
+        self.rarity = rarity
         self.price = price
         self.sell_value = sell_value
         self.mult_effect = 0 

@@ -54,7 +54,7 @@ def create_joker(joker_name: str) -> Optional[Joker]:
 
 class GreenJoker(Joker): #NEED to store global played vs discard functionality not just round
     def __init__(self):
-        super().__init__("Green Joker", price=4, sell_value=2)
+        super().__init__("Green Joker", price=4, sell_value=2, rarity='base')
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict, Inventory=None) -> JokerEffect:
         effect = JokerEffect()
@@ -64,7 +64,7 @@ class GreenJoker(Joker): #NEED to store global played vs discard functionality n
 
 class MrBonesJoker(Joker):
     def __init__(self):
-        super().__init__("Mr. Bones", price=5, sell_value=2)
+        super().__init__("Mr. Bones", price=5, sell_value=2, rarity='uncommon')
         self.activated = False
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
@@ -73,7 +73,7 @@ class MrBonesJoker(Joker):
 
 class DelayedGratificationJoker(Joker):
     def __init__(self):
-        super().__init__("Delayed Gratification", price=4, sell_value=2)
+        super().__init__("Delayed Gratification", price=4, sell_value=2, rarity='base')
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
         effect = JokerEffect()
@@ -83,7 +83,7 @@ class DelayedGratificationJoker(Joker):
 
 class CleverJoker(Joker): #NEED to handle flush with a two pair in it
     def __init__(self):
-        super().__init__("Clever", price=4, sell_value=2)
+        super().__init__("Clever", price=4, sell_value=2, rarity='base')
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
         effect = JokerEffect()
@@ -94,7 +94,7 @@ class CleverJoker(Joker): #NEED to handle flush with a two pair in it
 
 class MadJoker(Joker): #NEED to handle flush with a two pair in it
     def __init__(self):
-        super().__init__("Mad", price=4, sell_value=2)
+        super().__init__("Mad", price=4, sell_value=2, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
 
@@ -105,7 +105,7 @@ class MadJoker(Joker): #NEED to handle flush with a two pair in it
     
 class WilyJoker(Joker): #NEED to handle flush with a three of a kind in it
     def __init__(self):
-        super().__init__("Wily", price=4, sell_value=2)
+        super().__init__("Wily", price=4, sell_value=2, rarity='base')
 
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
@@ -116,7 +116,7 @@ class WilyJoker(Joker): #NEED to handle flush with a three of a kind in it
 
 class CraftyJoker(Joker):
     def __init__(self):
-        super().__init__("Crafty", price=4, sell_value=2)
+        super().__init__("Crafty", price=4, sell_value=2, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
@@ -126,7 +126,7 @@ class CraftyJoker(Joker):
 
 class MisprintJoker(Joker):
     def __init__(self):
-        super().__init__("Misprint", price=4, sell_value=1)
+        super().__init__("Misprint", price=4, sell_value=1, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
@@ -135,7 +135,7 @@ class MisprintJoker(Joker):
 
 class SquareJoker(Joker):
     def __init__(self):
-        super().__init__("Square", price=4, sell_value=2)
+        super().__init__("Square", price=4, sell_value=2, rarity='base')
         self.four_card_hands_played = 0
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
@@ -150,7 +150,7 @@ class SquareJoker(Joker):
     
 class WrathfulJoker(Joker):
     def __init__(self):
-        super().__init__("Wrathful", price=5, sell_value=2)
+        super().__init__("Wrathful", price=5, sell_value=2, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
@@ -160,7 +160,7 @@ class WrathfulJoker(Joker):
     
 class SmileyJoker(Joker):
     def __init__(self):
-        super().__init__("Smiley", price=4, sell_value=2)
+        super().__init__("Smiley", price=4, sell_value=2, rarity='base')
 
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
@@ -170,7 +170,7 @@ class SmileyJoker(Joker):
 
 class EvenSteven(Joker):
     def __init__(self):
-        super().__init__("EvenSteven", price = 4, sell_value=2)
+        super().__init__("EvenSteven", price = 4, sell_value=2, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
@@ -180,7 +180,7 @@ class EvenSteven(Joker):
 
 class BlueJoker(Joker):
     def __init__(self):
-        super().__init__("Blue", price =5, sell_value=1)
+        super().__init__("Blue", price =5, sell_value=1, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
@@ -190,7 +190,7 @@ class BlueJoker(Joker):
 
 class WalkieTalkieJoker(Joker):
     def __init__(self):
-        super().__init__("Walkie Talkie", price=4, sell_value=2)
+        super().__init__("Walkie Talkie", price=4, sell_value=2, rarity='base')
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
         effect = JokerEffect()
@@ -201,7 +201,7 @@ class WalkieTalkieJoker(Joker):
 
 class RocketJoker(Joker):
     def __init__(self):
-        super().__init__("Rocket", price=6, sell_value=3)
+        super().__init__("Rocket", price=6, sell_value=3, rarity='uncommon')
         self.boss_blind_defeated = 0
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict) -> JokerEffect:
@@ -211,7 +211,7 @@ class RocketJoker(Joker):
     
 class ScaryJoker(Joker):
     def __init__(self):
-        super().__init__("Scary Face", price=4, sell_value=2)
+        super().__init__("Scary Face", price=4, sell_value=2, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
@@ -221,7 +221,7 @@ class ScaryJoker(Joker):
     
 class BannerJoker(Joker):
     def __init__(self):
-        super().__init__("Banner", price=5, sell_value=2)
+        super().__init__("Banner", price=5, sell_value=2, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
@@ -230,7 +230,7 @@ class BannerJoker(Joker):
     
 class TheDuoJoker(Joker): # NEED functionality to check if pair is in flush 
     def __init__(self):
-        super().__init__("The Duo", price=8, sell_value=4)
+        super().__init__("The Duo", price=8, sell_value=4, rarity='rare')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
@@ -240,7 +240,7 @@ class TheDuoJoker(Joker): # NEED functionality to check if pair is in flush
 
 class GluttonousJoker(Joker):
     def __init__(self):
-        super().__init__("Gluttonous", price=5, sell_value=2)
+        super().__init__("Gluttonous", price=5, sell_value=2, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
@@ -250,7 +250,7 @@ class GluttonousJoker(Joker):
 
 class FortuneTellerJoker(Joker):
     def __init__(self):
-        super().__init__("Fortune Teller", price=6, sell_value=3)
+        super().__init__("Fortune Teller", price=6, sell_value=3, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
@@ -259,7 +259,7 @@ class FortuneTellerJoker(Joker):
 
 class BusinessCardJoker(Joker):
     def __init__(self):
-        super().__init__("BusinessCard", price=8, sell_value=4)
+        super().__init__("BusinessCard", price=4, sell_value=2, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         rng = random.randint(0,1)
@@ -271,23 +271,21 @@ class BusinessCardJoker(Joker):
     
 class BaseballJoker(Joker):
     def __init__(self):
-        super().__init__("BaseballJoker", price=6, sell_value=3)
+        super().__init__("BaseballJoker", price=8, sell_value=4, rarity='rare')
 
     def calculate_effect(self, hand, discards, deck, round_info):
         effect = JokerEffect()
         uncommon_count = 0
         inventory = round_info.get('inventory') if round_info else None
-        for joker in inventory.jokers:
-            print(joker.rarity)
         if inventory and hasattr(inventory, 'jokers'):
-            uncommon_count = sum(1 for joker in inventory.jokers if joker.rarity == "Uncommon")
+            uncommon_count = sum(1 for joker in inventory.jokers if joker.rarity == "uncommon")
         effect.mult_mult = max(1, 1.5 * uncommon_count)
         return effect
     
 
 class BlackBoardJoker(Joker):
     def __init__(self):
-        super().__init__("Black Board", price=6, sell_value=3)
+        super().__init__("Black Board", price=6, sell_value=3, rarity='uncommon')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
 
@@ -301,7 +299,7 @@ class BlackBoardJoker(Joker):
 
 class PhotographJoker(Joker):
     def __init__(self):
-        super().__init__("Photograph", price=5, sell_value=2)
+        super().__init__("Photograph", price=5, sell_value=2, rarity='base')
         self.first_face_card_found = False
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
@@ -322,7 +320,7 @@ class PhotographJoker(Joker):
 
 class EightBallJoker(Joker):
     def __init__(self):
-        super().__init__("8 Ball", price=5, sell_value=2)
+        super().__init__("8 Ball", price=5, sell_value=2, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
 
@@ -345,7 +343,7 @@ class EightBallJoker(Joker):
 
 class CartomancerJoker(Joker):
     def __init__(self):
-        super().__init__("Cartomancer", price=6, sell_value=3)
+        super().__init__("Cartomancer", price=6, sell_value=3, rarity='uncommon')
         self.blind_selected_this_round = False
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
@@ -368,7 +366,7 @@ class CartomancerJoker(Joker):
 
 class FacelessJoker(Joker):
     def __init__(self):
-        super().__init__("Faceless", price=4, sell_value=2)
+        super().__init__("Faceless", price=4, sell_value=2, rarity='base')
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict, Inventory=None) -> JokerEffect:
         effect = JokerEffect()
@@ -379,7 +377,7 @@ class FacelessJoker(Joker):
 
 class SocksAndBuskinJoker(Joker):
     def __init__(self):
-        super().__init__("Socks and Buskin", price=6, sell_value=3)
+        super().__init__("Socks and Buskin", price=6, sell_value=3, rarity='uncommon')
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict, Inventory=None) -> JokerEffect:
         effect = JokerEffect()
@@ -390,7 +388,7 @@ class SocksAndBuskinJoker(Joker):
 
 class BrainstormJoker(Joker):
     def __init__(self):
-        super().__init__("Brainstorm", price=10, sell_value=5)
+        super().__init__("Brainstorm", price=10, sell_value=5, rarity='rare')
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict, Inventory=None) -> JokerEffect:
         effect = JokerEffect()
@@ -407,7 +405,7 @@ class BrainstormJoker(Joker):
 
 class BootstrapsJoker(Joker):
     def __init__(self):
-        super().__init__("Bootstraps", price=7, sell_value=3)
+        super().__init__("Bootstraps", price=7, sell_value=3, rarity='uncommon')
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict, Inventory=None) -> JokerEffect:
         effect = JokerEffect()
@@ -419,7 +417,7 @@ class BootstrapsJoker(Joker):
 
 class SplashJoker(Joker):
     def __init__(self):
-        super().__init__("Splash", price=3, sell_value=1)
+        super().__init__("Splash", price=3, sell_value=1, rarity='base')
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict, Inventory=None) -> JokerEffect:
         effect = JokerEffect()
@@ -428,7 +426,7 @@ class SplashJoker(Joker):
 
 class Cloud9Joker(Joker):
     def __init__(self):
-        super().__init__("Cloud 9", price=7, sell_value=3)
+        super().__init__("Cloud 9", price=7, sell_value=3, rarity='uncommon')
         
     def calculate_effect(self, hand: List, discards: int, deck: List, round_info: dict, Inventory=None) -> JokerEffect:
         effect = JokerEffect()
@@ -440,7 +438,7 @@ class Cloud9Joker(Joker):
     
 class Droll(Joker):
     def __init__(self):
-        super().__init__("Droll", price=4, sell_value=2)
+        super().__init__("Droll", price=4, sell_value=2, rarity='base')
     
     def calculate_effect(self, hand, discards, deck, round_info, Inventory=None):
         effect = JokerEffect()
