@@ -179,6 +179,7 @@ class Inventory:
             "THREE_OF_A_KIND": (3, 30),
             "STRAIGHT": (4, 30),
             "FULL_HOUSE": (4, 40),
+            "FLUSH": (4, 35),
             "FOUR_OF_A_KIND": (7, 60),
             "STRAIGHT_FLUSH": (8, 100)
         }
