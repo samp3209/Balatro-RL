@@ -1652,8 +1652,10 @@ def handle_pack_opening(self, pack_type, item_index):
 
 def train_with_curriculum():
     """Enhanced curriculum learning approach"""
-    # Create the base agents
+    # Create the base environment
     env = BalatroEnv(config={'simplified': True})
+    
+    # Create the play agent
     play_state_size = len(env._get_play_state())
     play_agent = PlayingAgent(state_size=play_state_size, 
                              action_size=env._define_play_action_space())
@@ -1663,8 +1665,9 @@ def train_with_curriculum():
     add_demonstration_examples(play_agent, num_examples=200)
     
     # Phase 1: Train with simplified game (no boss blinds, fixed deck)
-    print("Phase 1: Learning basic card play...")
-    play_agent, _ = train_agents(episodes=500, game_config={'simplified': True}, 
+    print("\n===== PHASE 1: LEARNING BASIC CARD PLAY =====")
+    play_agent, _ = train_agents(episodes=500, 
+                                game_config={'simplified': True}, 
                                 play_agent=play_agent,
                                 log_interval=20)
     
@@ -1672,20 +1675,14 @@ def train_with_curriculum():
     results = evaluate_agent(play_agent, num_episodes=20, config={'simplified': True})
     print(f"After Phase 1: average score: {results['avg_score']}, max ante: {results['max_ante']}")
     
-    if results['max_ante'] < 2:
-        print("Phase 1 performance too low. Retraining with more demonstrations...")
-        add_demonstration_examples(play_agent, num_examples=300)
-        play_agent, _ = train_agents(episodes=500, game_config={'simplified': True}, 
-                                    play_agent=play_agent,
-                                    log_interval=20)
     
     # Create strategy agent
     strategy_state_size = len(env._get_strategy_state())
     strategy_agent = StrategyAgent(state_size=strategy_state_size,
                                   action_size=env._define_strategy_action_space())
     
-    # Phase 2: Include boss blinds and shop interaction
-    print("Phase 2: Adding boss blinds and shop strategy...")
+    # Phase 2: Include shop interaction
+    print("\n===== PHASE 2: ADDING SHOP STRATEGY =====")
     play_agent, strategy_agent = train_agents(episodes=1000, 
                                              game_config={'simplified': False},
                                              play_agent=play_agent,
@@ -1693,12 +1690,22 @@ def train_with_curriculum():
                                              log_interval=20)
     
     # Phase 3: Full game with enhanced exploration
-    print("Phase 3: Full game training...")
+    print("\n===== PHASE 3: FULL GAME TRAINING =====")
     play_agent, strategy_agent = train_agents(episodes=2000,
                                              game_config={'full_features': True},
                                              play_agent=play_agent,
                                              strategy_agent=strategy_agent,
                                              log_interval=20)
+    
+    # Save final models
+    play_agent.save_model("play_agent_curriculum_final.h5")
+    strategy_agent.save_model("strategy_agent_curriculum_final.h5")
+    
+    # Final evaluation
+    results = evaluate_agents(play_agent, strategy_agent, episodes=50)
+    print("\n===== CURRICULUM TRAINING COMPLETE =====")
+    print(f"Win rate: {results['win_rate']:.2f}%")
+    print(f"Average max ante: {results['average_score']:.2f}")
     
     return play_agent, strategy_agent
 
@@ -1707,22 +1714,30 @@ def add_demonstration_examples(play_agent, num_examples=100):
     """Add expert demonstration examples to the agent's memory"""
     env = BalatroEnv(config={'simplified': True})
     
-    for i in range(num_examples):
+    print(f"Adding {num_examples} demonstration examples...")
+    examples_added = 0
+    
+    for _ in range(num_examples):
         state = env.reset()
         done = False
+        steps = 0
         
-        while not done:
-            # Get the best hand according to poker rules
+        while not done and steps < 50:  # Limit steps to avoid infinite loops
+            steps += 1
+            
+            # First, check if we have a good poker hand available
             best_hand_info = env.game_manager.get_best_hand_from_current()
             
-            if best_hand_info:
+            if best_hand_info and best_hand_info[0].value >= 2:  # Better than HIGH_CARD
                 # Convert the best hand to card indices
                 best_hand, best_cards = best_hand_info
                 indices = []
                 
                 for card in best_cards:
                     for i, hand_card in enumerate(env.game_manager.current_hand):
-                        if hand_card.rank == card.rank and hand_card.suit == card.suit:
+                        if (hasattr(hand_card, 'rank') and hasattr(card, 'rank') and 
+                            hasattr(hand_card, 'suit') and hasattr(card, 'suit') and 
+                            hand_card.rank == card.rank and hand_card.suit == card.suit):
                             indices.append(i)
                             break
                 
@@ -1731,42 +1746,67 @@ def add_demonstration_examples(play_agent, num_examples=100):
                 for idx in indices:
                     action |= (1 << idx)
                 
-                # Execute the action and get next state, reward
-                next_state, reward, done, _ = env.step_play(action)
+                # Take the action
+                next_state, reward, done, info = env.step_play(action)
                 
-                # Add this as a demonstration example
+                # Add this experience to memory
                 play_agent.remember(state, action, reward, next_state, done)
+                examples_added += 1
                 
                 state = next_state
-            else:
-                # If no good hand, try discarding
-                if env.game_manager.discards_used < env.game_manager.max_discards_per_round:
-                    # Discard low cards
-                    indices = []
-                    low_cards = sorted([(i, card.rank.value) for i, card in enumerate(env.game_manager.current_hand)], 
-                                     key=lambda x: x[1])[:3]
-                    indices = [idx for idx, _ in low_cards]
-                    
-                    action = 0
-                    for idx in indices:
-                        action |= (1 << idx)
-                    
-                    # Make it a discard action
-                    action += 256
-                    
-                    next_state, reward, done, _ = env.step_play(action)
-                    play_agent.remember(state, action, reward, next_state, done)
-                    
+                
+                # Handle shop phase if needed - just skip it for demonstration
+                if info.get('shop_phase', False) and not done:
+                    next_state, _, done, _ = env.step_strategy(15)  # Skip action
                     state = next_state
-                else:
-                    # If can't discard, just play all cards
-                    action = (1 << len(env.game_manager.current_hand)) - 1
-                    next_state, reward, done, _ = env.step_play(action)
-                    play_agent.remember(state, action, reward, next_state, done)
-                    
+            
+            # If no good hand, try to discard poor cards
+            elif env.game_manager.discards_used < env.game_manager.max_discards_per_round:
+                # Find the lowest cards to discard
+                cards_with_values = [(i, card.rank.value) for i, card in enumerate(env.game_manager.current_hand)]
+                cards_with_values.sort(key=lambda x: x[1])  # Sort by rank value
+                
+                # Discard up to 3 of the lowest cards
+                indices = [idx for idx, _ in cards_with_values[:min(3, len(cards_with_values))]]
+                
+                action = 0
+                for idx in indices:
+                    action |= (1 << idx)
+                
+                # Make it a discard action
+                action += 256
+                
+                next_state, reward, done, info = env.step_play(action)
+                
+                # Add this experience to memory
+                play_agent.remember(state, action, reward, next_state, done)
+                examples_added += 1
+                
+                state = next_state
+                
+                # Handle shop phase if needed
+                if info.get('shop_phase', False) and not done:
+                    next_state, _, done, _ = env.step_strategy(15)  # Skip action
+                    state = next_state
+            
+            # If can't discard and no good hand, play all cards as last resort
+            else:
+                action = (1 << len(env.game_manager.current_hand)) - 1
+                next_state, reward, done, info = env.step_play(action)
+                
+                # Add this experience to memory
+                play_agent.remember(state, action, reward, next_state, done)
+                examples_added += 1
+                
+                state = next_state
+                
+                # Handle shop phase if needed
+                if info.get('shop_phase', False) and not done:
+                    next_state, _, done, _ = env.step_strategy(15)  # Skip action
                     state = next_state
     
-    print(f"Added {len(play_agent.memory)} demonstration examples to memory")
+    print(f"Successfully added {examples_added} demonstration examples to memory")
+    return examples_added
 
 
 def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=500, play_agent=None, strategy_agent=None, log_interval=100):
@@ -1807,12 +1847,13 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
         # Track game progress
         max_ante_reached = 1
         game_steps = 0
+        shop_steps = 0  # Track steps in shop phase separately
         
         done = False
         in_shop_phase = False
         
         # Game loop - similar to the loop in GameTest.py
-        while not done and game_steps < 1000:  # Safety limit
+        while not done and game_steps < 500:  # Reduced safety limit to avoid infinite loops
             game_steps += 1
             
             # PLAY PHASE
@@ -1831,43 +1872,47 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
                 
                 # Check if we need to enter shop phase (ante beaten)
                 if info.get('shop_phase', False) and not done:
-                    print(f"Episode {e+1}: Entering shop phase at step {game_steps}")
+                    print(f"Episode {e+1}: Entering shop phase at step {game_steps}, Round {env.game_manager.game.current_ante}")
                     in_shop_phase = True
+                    shop_steps = 0  # Reset shop steps counter
+                    # Make sure shop is updated
+                    env.update_shop()
             
             # SHOP PHASE - only enter if ante is beaten
             else:
+                shop_steps += 1
+                
                 # Now we're in the strategy phase
                 strategy_state = env._get_strategy_state()
                 valid_strategy_actions = env.get_valid_strategy_actions()
-                strategy_action = strategy_agent.act(strategy_state, valid_actions=valid_strategy_actions)
                 
+                # Force skip to next ante after a few shop interactions or if shop steps are too many
+                if shop_steps >= 5 or game_steps % 20 == 0:
+                    print(f"Episode {e+1}: Forcing skip to next ante at shop step {shop_steps}")
+                    strategy_action = 15  # Force Skip action
+                else:
+                    strategy_action = strategy_agent.act(strategy_state, valid_actions=valid_strategy_actions)
+                
+                # Execute the action
                 next_strategy_state, strategy_reward, strategy_done, strategy_info = env.step_strategy(strategy_action)
                 
                 # Remember strategy experience
                 strategy_agent.remember(strategy_state, strategy_action, strategy_reward, 
-                                       next_strategy_state, strategy_done)
+                                      next_strategy_state, strategy_done)
                 
                 strategy_total_reward += strategy_reward
                 done = strategy_done
                 
-                # Check if we've left the shop phase
-                if not env.game_manager.current_ante_beaten or done:
+                # Check if we need to exit shop phase
+                if strategy_action == 15 or not env.game_manager.current_ante_beaten or done:
                     in_shop_phase = False
                     print(f"Episode {e+1}: Exited shop phase, now at ante {env.game_manager.game.current_ante}")
                     
-                    # Reset play state after strategy phase
-                    if not done:
-                        play_state = env._get_play_state()
-                
-                # Force shop phase exit if it's been too long
-                if in_shop_phase and game_steps % 20 == 0:
-                    # Skip to next ante if we're stuck in shop too long
-                    print(f"Episode {e+1}: Forcing shop phase exit at step {game_steps}")
-                    strategy_action = 15  # Skip action (next ante)
-                    _, _, strategy_done, _ = env.step_strategy(strategy_action)
-                    done = strategy_done
-                    in_shop_phase = False
+                    # Make sure we have a hand for the next round
+                    if not done and not env.game_manager.current_hand:
+                        env.game_manager.deal_new_hand()
                     
+                    # Get fresh play state
                     if not done:
                         play_state = env._get_play_state()
         
@@ -1912,7 +1957,6 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
     return play_agent, strategy_agent
 
 
-
 def evaluate_agents(play_agent, strategy_agent, episodes=100):
     """Evaluate agent performance without exploration"""
     env = BalatroEnv()
@@ -1942,28 +1986,58 @@ def evaluate_agents(play_agent, strategy_agent, episodes=100):
         max_ante = 1
         hands_played = 0
         game_won = False
+        game_steps = 0
         
         done = False
-        while not done:
-            # Playing phase
-            play_action = play_agent.act(play_state)
-            next_play_state, play_reward, done, _ = env.step_play(play_action)
-            play_state = next_play_state
-            play_total_reward += play_reward
+        in_shop_phase = False
+        
+        # Game loop - similar to test_rl_model
+        while not done and game_steps < 500:
+            game_steps += 1
             
-            hands_played += 1
-            max_ante = max(max_ante, env.game_manager.game.current_ante)
+            # PLAY PHASE
+            if not in_shop_phase:
+                valid_play_actions = env.get_valid_play_actions()
+                play_action = play_agent.act(play_state, valid_actions=valid_play_actions)
+                next_play_state, play_reward, done, info = env.step_play(play_action)
+                
+                play_state = next_play_state
+                play_total_reward += play_reward
+                
+                hands_played += 1
+                max_ante = max(max_ante, env.game_manager.game.current_ante)
+                
+                # Check if we need to enter shop phase
+                if info.get('shop_phase', False) and not done:
+                    in_shop_phase = True
+                    # Update shop for current ante
+                    env.update_shop()
             
-            # Strategy phase
-            if env.game_manager.current_ante_beaten and not done:
+            # STRATEGY PHASE
+            else:
                 strategy_state = env._get_strategy_state()
-                strategy_action = strategy_agent.act(strategy_state)
+                valid_strategy_actions = env.get_valid_strategy_actions()
                 
-                next_strategy_state, strategy_reward, done, _ = env.step_strategy(strategy_action)
+                # Force skip to next ante after a few steps to prevent getting stuck
+                if game_steps % 10 == 0:
+                    strategy_action = 15  # Skip action
+                else:
+                    strategy_action = strategy_agent.act(strategy_state, valid_strategy_actions)
+                
+                next_strategy_state, strategy_reward, strategy_done, _ = env.step_strategy(strategy_action)
                 strategy_total_reward += strategy_reward
+                done = strategy_done
                 
-                if not done:
-                    play_state = env._get_play_state()
+                # Check if we need to exit shop phase
+                if strategy_action == 15 or not env.game_manager.current_ante_beaten or done:
+                    in_shop_phase = False
+                    # Make sure we have a hand for next round
+                    if not done and not env.game_manager.current_hand:
+                        env.game_manager.deal_new_hand()
+                    
+                    # Get fresh play state
+                    if not done:
+                        play_state = env._get_play_state()
         
         # Record results
         results['play_rewards'].append(play_total_reward)
@@ -1971,10 +2045,13 @@ def evaluate_agents(play_agent, strategy_agent, episodes=100):
         results['max_antes'].append(max_ante)
         results['hands_played'].append(hands_played)
         
-        # Consider a win if player reached ante 8
+        # Consider a win if player reached ante 8 or higher
         if max_ante >= 8:
             game_won = True
         results['win_rate'] += 1 if game_won else 0
+        
+        if (e + 1) % 10 == 0:
+            print(f"Evaluated {e + 1}/{episodes} episodes. Current max ante: {max_ante}")
     
     # Calculate averages
     results['win_rate'] = results['win_rate'] / episodes * 100
