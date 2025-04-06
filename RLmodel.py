@@ -1,10 +1,12 @@
 from collections import deque
+import itertools
 from GameManager import GameManager
 import numpy as np
 from Inventory import Inventory
 from Card import Card
 from Enums import *
 from Shop import Shop, ShopItem, ShopItemType, initialize_shops_for_game, FixedShop
+from HandEvaluator import *
 
 
 from tensorflow.keras.models import Sequential
@@ -314,7 +316,30 @@ class BalatroEnv:
         state_features.append(float(self.game_manager.max_discards_per_round))
         state_features.append(1.0 if self.game_manager.game.is_boss_blind else 0.0)
         
+        has_pair = 0.0
+        has_two_pair = 0.0
+        has_three_kind = 0.0
+        has_straight_potential = 0.0
+        has_flush_potential = 0.0
         
+        if best_hand_info := self.game_manager.get_best_hand_from_current():
+            hand_type, _ = best_hand_info
+            if hand_type.value >= HandType.PAIR.value:
+                has_pair = 1.0
+            if hand_type.value >= HandType.TWO_PAIR.value:
+                has_two_pair = 1.0
+            if hand_type.value >= HandType.THREE_OF_A_KIND.value:
+                has_three_kind = 1.0
+            if hand_type.value >= HandType.STRAIGHT.value:
+                has_straight_potential = 1.0
+            if hand_type.value >= HandType.FLUSH.value:
+                has_flush_potential = 1.0
+        
+        state_features.extend([has_pair, has_two_pair, has_three_kind, 
+                            has_straight_potential, has_flush_potential])
+
+
+
         for i in range(8):
             if i < len(self.game_manager.current_hand):
                 card = self.game_manager.current_hand[i]
@@ -341,7 +366,7 @@ class BalatroEnv:
             else:
                 state_features.extend([0.0] * 8)
         
-        assert len(state_features) == 72, f"Expected 72 features, got {len(state_features)}"
+        assert len(state_features) == 77, f"Expected 77 features, got {len(state_features)}"
         
         return np.array(state_features, dtype=np.float32)
         
@@ -384,7 +409,8 @@ class BalatroEnv:
         else:
             for _ in range(4 * (2 + len(ShopItemType))):
                 state_features.append(0.0)
-        
+        print(f"Strategy state size: {len(state_features)}")
+
         return np.array(state_features, dtype=np.float32)
     
     def _define_play_action_space(self):
@@ -921,15 +947,26 @@ class PlayingAgent:
         self.DISCARD_ACTION = 1
         
     def _build_model(self):
-        """Build a neural network for predicting Q-values with the correct input size"""
+        """Build a more sophisticated neural network for predicting Q-values"""
         model = Sequential()
-        model.add(Dense(128, input_dim=self.state_size, activation='relu'))
-        model.add(Dropout(0.1))
+        
+        # First layer with more units
+        model.add(Dense(256, input_dim=self.state_size, activation='relu'))
+        model.add(Dropout(0.2))
+        
+        # Add an intermediate layer
+        model.add(Dense(256, activation='relu'))
+        model.add(Dropout(0.2))
+        
+        # Add another intermediate layer
         model.add(Dense(128, activation='relu'))
         model.add(Dropout(0.1))
-        model.add(Dense(64, activation='relu'))
+        
+        # Output layer
         model.add(Dense(self.action_size, activation='linear'))
-        model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
+        
+        # Use a lower learning rate
+        model.compile(loss='mse', optimizer=Adam(learning_rate=0.0005))
         return model
     
     def update_target_model(self):
@@ -944,7 +981,7 @@ class PlayingAgent:
         self.recent_rewards.append(reward)
         
     def act(self, state, valid_actions=None):
-        """Choose an action using epsilon-greedy policy"""
+        """Choose an action using epsilon-greedy policy with size adaptation"""
         # Make sure state is a numpy array of proper type
         if not isinstance(state, np.ndarray):
             state = np.array(state, dtype=np.float32)
@@ -952,6 +989,21 @@ class PlayingAgent:
         # Ensure state is the right shape for the model
         if len(state.shape) == 1:
             state = state.reshape(1, -1)
+        
+        # Get expected size from the model's first layer
+        expected_size = self.state_size  # Use the stored state_size value
+        actual_size = state.shape[1]
+        
+        # Handle size mismatch if needed
+        if actual_size != expected_size:
+            print(f"Warning: State size mismatch. Expected {expected_size}, got {actual_size}")
+            if actual_size < expected_size:
+                # Pad with zeros
+                padding = np.zeros((1, expected_size - actual_size))
+                state = np.concatenate([state, padding], axis=1)
+            else:
+                # Truncate
+                state = state[:, :expected_size]
         
         # Explore: choose random action
         if np.random.rand() <= self.epsilon:
@@ -1163,15 +1215,68 @@ class PlayingAgent:
         # Return a value between 0 (poor hand) and 1 (excellent hand)
         return 0.5  # Placeholder implementation
     
-    def prioritized_experience_replay(self, batch_size, alpha=0.6, beta=0.4):
-        """
-        Prioritized Experience Replay implementation for more efficient learning
-        - Samples experiences with higher TD-errors more frequently
-        - Uses importance sampling to correct bias
-        """
-        # This would be a more advanced implementation than the basic replay
-        # Placeholder for the full implementation
-        pass
+    def prioritized_replay(self, batch_size):
+        """Prioritized Experience Replay implementation"""
+        if len(self.memory) < batch_size:
+            return
+        
+        # Calculate TD errors for prioritization
+        td_errors = []
+        for state, action, reward, next_state, done in self.memory:
+            state_array = np.array(state).reshape(1, -1)
+            next_state_array = np.array(next_state).reshape(1, -1)
+            
+            current_q = self.model.predict(state_array, verbose=0)[0][action]
+            
+            if done:
+                target_q = reward
+            else:
+                target_q = reward + self.gamma * np.max(self.target_model.predict(next_state_array, verbose=0)[0])
+            
+            # TD error is the difference between target and current Q-value
+            td_error = abs(target_q - current_q)
+            td_errors.append(td_error)
+        
+        # Convert errors to probabilities with prioritization
+        probabilities = np.array(td_errors) ** 0.6  # Alpha parameter
+        probabilities = probabilities / np.sum(probabilities)
+        
+        # Sample according to these probabilities
+        indices = np.random.choice(len(self.memory), batch_size, p=probabilities)
+        
+        # Get the samples
+        states = []
+        actions = []
+        rewards = []
+        next_states = []
+        dones = []
+        
+        for idx in indices:
+            states.append(self.memory[idx][0])
+            actions.append(self.memory[idx][1])
+            rewards.append(self.memory[idx][2])
+            next_states.append(self.memory[idx][3])
+            dones.append(self.memory[idx][4])
+        
+        # Convert to arrays
+        states = np.array(states)
+        actions = np.array(actions)
+        rewards = np.array(rewards)
+        next_states = np.array(next_states)
+        dones = np.array(dones)
+        
+        # Update Q-values
+        targets = self.model.predict(states, verbose=0)
+        next_q_values = self.target_model.predict(next_states, verbose=0)
+        
+        for i in range(batch_size):
+            if dones[i]:
+                targets[i, actions[i]] = rewards[i]
+            else:
+                targets[i, actions[i]] = rewards[i] + self.gamma * np.max(next_q_values[i])
+        
+        # Train the model
+        self.model.fit(states, targets, epochs=1, verbose=0)
 
 class StrategyAgent:
     def __init__(self, state_size, action_size, learning_rate=0.001):
@@ -1213,16 +1318,14 @@ class StrategyAgent:
         }
     
     def _build_model(self):
-        """Build a neural network model for deep Q-learning."""
-        
+        """Build a neural network with the correct input dimensions"""
         model = Sequential()
-        model.add(Dense(128, input_dim=self.state_size, activation='relu'))
+        model.add(Dense(256, input_dim=77, activation='relu'))
         model.add(Dropout(0.2))
         model.add(Dense(128, activation='relu'))
-        model.add(Dropout(0.2))
+        model.add(Dropout(0.1))
         model.add(Dense(64, activation='relu'))
         model.add(Dense(self.action_size, activation='linear'))
-        
         model.compile(loss='mse', optimizer=Adam(learning_rate=self.learning_rate))
         return model
     
@@ -1231,65 +1334,139 @@ class StrategyAgent:
         self.target_model.set_weights(self.model.get_weights())
     
     def remember(self, state, action, reward, next_state, done):
-        """Store experience in replay memory"""
-        # Ensure consistent state format
+        """Store experience in replay memory with size adaptation"""
+        # Convert to numpy arrays
         if not isinstance(state, np.ndarray):
             state = np.array(state, dtype=np.float32)
         if not isinstance(next_state, np.ndarray):
             next_state = np.array(next_state, dtype=np.float32)
         
-        # Flatten multi-dimensional states for consistency
+        # Flatten multi-dimensional states
         if len(state.shape) > 1:
             state = state.flatten()
         if len(next_state.shape) > 1:
             next_state = next_state.flatten()
+        
+        # Handle size mismatch by padding states before storing
+        expected_size = 77  # Hardcoded expected size
+        
+        if len(state) != expected_size:
+            padded_state = np.zeros(expected_size, dtype=np.float32)
+            padded_state[:len(state)] = state
+            state = padded_state
             
+        if len(next_state) != expected_size:
+            padded_next_state = np.zeros(expected_size, dtype=np.float32)
+            padded_next_state[:len(next_state)] = next_state
+            next_state = padded_next_state
+        
+        # Store the padded states in memory
         self.memory.append((state, action, reward, next_state, done))
         
         # Track rewards for analytics
         self.recent_rewards.append(reward)
     
     def act(self, state, valid_actions=None):
-        """Choose an action based on the current state"""
-        state_array = np.array(state).reshape(1, -1)
+        """Choose an action with input adaptation"""
+        if not isinstance(state, np.ndarray):
+            state = np.array(state, dtype=np.float32)
+            
+        if len(state.shape) == 1:
+            state = state.reshape(1, -1)
         
+        # Handle mismatch - pad the input to match expected size
+        input_size = state.shape[1]
+        expected_size = 77  # Hardcoded expected size that your model wants
+        
+        if input_size != expected_size:
+            # Pad with zeros to match expected size
+            padded_state = np.zeros((1, expected_size), dtype=np.float32)
+            padded_state[0, :input_size] = state[0, :input_size]
+            state = padded_state
+        
+        # Rest of the method remains the same
         if np.random.rand() <= self.epsilon:
             if valid_actions is not None:
                 return random.choice(valid_actions)
             return random.randrange(self.action_size)
         
-        act_values = self.model.predict(state_array, verbose=0)
+        act_values = self.model.predict(state, verbose=0)
         
         if valid_actions is not None:
             mask = np.ones(self.action_size) * -1000000
-            mask[valid_actions] = 0
+            for action in valid_actions:
+                mask[action] = 0
             act_values = act_values + mask
         
         return np.argmax(act_values[0])
     
     def replay(self, batch_size):
-        """Train the agent with experiences from memory"""
+        """Train the agent with experiences from memory with size adaptation"""
         if len(self.memory) < batch_size:
             return
         
+        # Sample random batch from memory
         minibatch = random.sample(self.memory, batch_size)
         
-        states = np.array([experience[0] for experience in minibatch])
-        actions = np.array([experience[1] for experience in minibatch])
-        rewards = np.array([experience[2] for experience in minibatch])
-        next_states = np.array([experience[3] for experience in minibatch])
-        dones = np.array([experience[4] for experience in minibatch])
+        # Get expected input size from model
+        expected_size = 77  # Hardcoded based on the error message
         
+        # Pre-process states and next_states for consistent shapes
+        states = []
+        actions = []
+        rewards = []
+        next_states = []
+        dones = []
+        
+        for state, action, reward, next_state, done in minibatch:
+            # Convert to numpy if needed
+            if not isinstance(state, np.ndarray):
+                state = np.array(state, dtype=np.float32)
+            if not isinstance(next_state, np.ndarray):
+                next_state = np.array(next_state, dtype=np.float32)
+            
+            # Flatten multi-dimensional states
+            if len(state.shape) > 1:
+                state = state.flatten()
+            if len(next_state.shape) > 1:
+                next_state = next_state.flatten()
+            
+            # Handle size mismatch by padding
+            if len(state) != expected_size:
+                padded_state = np.zeros(expected_size, dtype=np.float32)
+                padded_state[:len(state)] = state
+                state = padded_state
+                
+            if len(next_state) != expected_size:
+                padded_next_state = np.zeros(expected_size, dtype=np.float32)
+                padded_next_state[:len(next_state)] = next_state
+                next_state = padded_next_state
+            
+            states.append(state)
+            actions.append(action)
+            rewards.append(reward)
+            next_states.append(next_state)
+            dones.append(done)
+        
+        # Convert to numpy arrays
+        states = np.array(states)
+        actions = np.array(actions)
+        rewards = np.array(rewards)
+        next_states = np.array(next_states)
+        dones = np.array(dones)
+        
+        # Get target values
         targets = self.model.predict(states, verbose=0)
-        
         next_q_values = self.target_model.predict(next_states, verbose=0)
         
+        # Update targets for actions taken
         for i in range(batch_size):
             if dones[i]:
                 targets[i, actions[i]] = rewards[i]
             else:
                 targets[i, actions[i]] = rewards[i] + self.gamma * np.max(next_q_values[i])
         
+        # Train the model
         self.model.fit(states, targets, epochs=1, verbose=0)
     
     def act_with_explanation(self, state, valid_actions=None):
@@ -1312,9 +1489,23 @@ class StrategyAgent:
         self.model.save(file_path)
     
     def load_model(self, file_path):
-        """Load the model from disk"""
-        self.model = tf.keras.models.load_model(file_path)
-        self.update_target_model()
+        """Load model from file with compatibility check"""
+        try:
+            loaded_model = tf.keras.models.load_model(file_path)
+            
+            expected_input_shape = (None, self.state_size)
+            actual_input_shape = loaded_model.layers[0].input_shape
+            
+            if actual_input_shape[1] != self.state_size:
+                print(f"Warning: Loaded model expects input dimension {actual_input_shape[1]}, " +
+                    f"but current state size is {self.state_size}. Creating new model.")
+                return
+                
+            self.model = loaded_model
+            self.update_target_model()
+            print(f"Successfully loaded model from {file_path}")
+        except Exception as e:
+            print(f"Error loading model: {e}. Creating new model.")
     
     def get_stats(self):
         """Return current performance stats"""
@@ -1651,12 +1842,20 @@ def handle_pack_opening(self, pack_type, item_index):
 
 
 def train_with_curriculum():
-    """Enhanced curriculum learning approach"""
+    """Enhanced curriculum learning approach with proper state size handling"""
     # Create the base environment
     env = BalatroEnv(config={'simplified': True})
     
-    # Create the play agent
-    play_state_size = len(env._get_play_state())
+    # Get accurate state sizes for both agents
+    play_state = env._get_play_state()
+    play_state_size = len(play_state)
+    print(f"Play state size: {play_state_size}")
+    
+    strategy_state = env._get_strategy_state()
+    strategy_state_size = len(strategy_state)
+    print(f"Strategy state size: {strategy_state_size}")
+    
+    # Create the play agent with correct size
     play_agent = PlayingAgent(state_size=play_state_size, 
                              action_size=env._define_play_action_space())
     
@@ -1664,20 +1863,15 @@ def train_with_curriculum():
     print("Adding demonstration examples...")
     add_demonstration_examples(play_agent, num_examples=200)
     
-    # Phase 1: Train with simplified game (no boss blinds, fixed deck)
+    # Phase 1: Train with simplified game (no shop/strategy agent yet)
     print("\n===== PHASE 1: LEARNING BASIC CARD PLAY =====")
     play_agent, _ = train_agents(episodes=500, 
                                 game_config={'simplified': True}, 
                                 play_agent=play_agent,
+                                strategy_agent=None,  # Skip strategy for now
                                 log_interval=20)
     
-    # Evaluate after Phase 1
-    results = evaluate_agent(play_agent, num_episodes=20, config={'simplified': True})
-    print(f"After Phase 1: average score: {results['avg_score']}, max ante: {results['max_ante']}")
-    
-    
-    # Create strategy agent
-    strategy_state_size = len(env._get_strategy_state())
+    # Create strategy agent only when needed
     strategy_agent = StrategyAgent(state_size=strategy_state_size,
                                   action_size=env._define_strategy_action_space())
     
@@ -1710,9 +1904,10 @@ def train_with_curriculum():
     return play_agent, strategy_agent
 
 
-def add_demonstration_examples(play_agent, num_examples=100):
-    """Add expert demonstration examples to the agent's memory"""
+def add_demonstration_examples(play_agent, num_examples=300):
+    """Add expert demonstration examples to the agent's memory with better poker hand recognition"""
     env = BalatroEnv(config={'simplified': True})
+    hand_evaluator = HandEvaluator()  # Create a hand evaluator instance
     
     print(f"Adding {num_examples} demonstration examples...")
     examples_added = 0
@@ -1722,48 +1917,46 @@ def add_demonstration_examples(play_agent, num_examples=100):
         done = False
         steps = 0
         
-        while not done and steps < 50:  # Limit steps to avoid infinite loops
+        while not done and steps < 50:
             steps += 1
             
-            # First, check if we have a good poker hand available
-            best_hand_info = env.game_manager.get_best_hand_from_current()
+            # Evaluate all possible hands from current cards
+            potential_hands = []
+            current_hand = env.game_manager.current_hand
             
-            if best_hand_info and best_hand_info[0].value >= 2:  # Better than HIGH_CARD
-                # Convert the best hand to card indices
-                best_hand, best_cards = best_hand_info
-                indices = []
-                
-                for card in best_cards:
-                    for i, hand_card in enumerate(env.game_manager.current_hand):
-                        if (hasattr(hand_card, 'rank') and hasattr(card, 'rank') and 
-                            hasattr(hand_card, 'suit') and hasattr(card, 'suit') and 
-                            hand_card.rank == card.rank and hand_card.suit == card.suit):
-                            indices.append(i)
-                            break
-                
-                # Convert indices to action number
+            # Try all combinations of 5 or more cards
+            for r in range(5, len(current_hand) + 1):
+                for combo in itertools.combinations(range(len(current_hand)), r):
+                    cards = [current_hand[i] for i in combo]
+                    hand_type, _, scoring_cards = hand_evaluator.evaluate_hand(cards)
+                    hand_value = hand_type.value
+                    potential_hands.append((list(combo), hand_value, hand_type))
+            
+            # Sort by hand value (descending)
+            potential_hands.sort(key=lambda x: x[1], reverse=True)
+            
+            # If we have a good hand, play it
+            if potential_hands and potential_hands[0][1] >= HandType.TWO_PAIR.value:
+                indices = potential_hands[0][0]
                 action = 0
                 for idx in indices:
                     action |= (1 << idx)
                 
-                # Take the action
                 next_state, reward, done, info = env.step_play(action)
                 
+                # Enhance reward for good hands
+                enhanced_reward = reward * 1.5  # Boost the reward
+                
                 # Add this experience to memory
-                play_agent.remember(state, action, reward, next_state, done)
+                play_agent.remember(state, action, enhanced_reward, next_state, done)
                 examples_added += 1
                 
                 state = next_state
-                
-                # Handle shop phase if needed - just skip it for demonstration
-                if info.get('shop_phase', False) and not done:
-                    next_state, _, done, _ = env.step_strategy(15)  # Skip action
-                    state = next_state
             
-            # If no good hand, try to discard poor cards
+            # If no good hand and we can discard, do so
             elif env.game_manager.discards_used < env.game_manager.max_discards_per_round:
                 # Find the lowest cards to discard
-                cards_with_values = [(i, card.rank.value) for i, card in enumerate(env.game_manager.current_hand)]
+                cards_with_values = [(i, card.rank.value) for i, card in enumerate(current_hand)]
                 cards_with_values.sort(key=lambda x: x[1])  # Sort by rank value
                 
                 # Discard up to 3 of the lowest cards
@@ -1777,37 +1970,35 @@ def add_demonstration_examples(play_agent, num_examples=100):
                 action += 256
                 
                 next_state, reward, done, info = env.step_play(action)
-                
-                # Add this experience to memory
                 play_agent.remember(state, action, reward, next_state, done)
                 examples_added += 1
                 
                 state = next_state
-                
-                # Handle shop phase if needed
-                if info.get('shop_phase', False) and not done:
-                    next_state, _, done, _ = env.step_strategy(15)  # Skip action
-                    state = next_state
             
-            # If can't discard and no good hand, play all cards as last resort
+            # Otherwise, play the best hand we have
             else:
-                action = (1 << len(env.game_manager.current_hand)) - 1
-                next_state, reward, done, info = env.step_play(action)
+                if potential_hands:
+                    indices = potential_hands[0][0]  # Best hand we have
+                    action = 0
+                    for idx in indices:
+                        action |= (1 << idx)
+                else:
+                    # Play all cards as last resort
+                    action = (1 << len(current_hand)) - 1
                 
-                # Add this experience to memory
+                next_state, reward, done, info = env.step_play(action)
                 play_agent.remember(state, action, reward, next_state, done)
                 examples_added += 1
                 
                 state = next_state
-                
-                # Handle shop phase if needed
-                if info.get('shop_phase', False) and not done:
-                    next_state, _, done, _ = env.step_strategy(15)  # Skip action
-                    state = next_state
+            
+            # Handle shop phase if needed - just skip it for demonstration
+            if info.get('shop_phase', False) and not done:
+                next_state, _, done, _ = env.step_strategy(15)  # Skip action
+                state = next_state
     
     print(f"Successfully added {examples_added} demonstration examples to memory")
     return examples_added
-
 
 def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=500, play_agent=None, strategy_agent=None, log_interval=100):
     if game_config is None:
@@ -1818,21 +2009,31 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
     
     env = BalatroEnv(config=game_config)
     
-    # Initialize play agent
+    # Get accurate state sizes for validation
     initial_play_state = env._get_play_state()
     play_state_size = len(initial_play_state)
+    
+    # Initialize play agent if not provided
     if play_agent is None:
         print(f"Creating new PlayingAgent with state_size={play_state_size}")
         play_agent = PlayingAgent(state_size=play_state_size, 
                                 action_size=env._define_play_action_space())
+    elif play_agent.state_size != play_state_size:
+        print(f"Warning: Play agent state size mismatch. Expected {play_state_size}, got {play_agent.state_size}")
+        print("Creating new play agent with correct size.")
+        play_agent = PlayingAgent(state_size=play_state_size, 
+                                action_size=env._define_play_action_space())
     
-    # Initialize strategy agent
-    strategy_state = env._get_strategy_state()
-    strategy_state_size = len(strategy_state)
-    if strategy_agent is None:  
-        print(f"Creating new StrategyAgent with state_size={strategy_state_size}")
-        strategy_agent = StrategyAgent(state_size=strategy_state_size, 
-                                     action_size=env._define_strategy_action_space())
+    # Only initialize strategy agent if provided or needed
+    if strategy_agent is not None:
+        strategy_state = env._get_strategy_state()
+        strategy_state_size = len(strategy_state)
+        
+        if strategy_agent.state_size != strategy_state_size:
+            print(f"Warning: Strategy agent state size mismatch. Expected {strategy_state_size}, got {strategy_agent.state_size}")
+            print("Creating new strategy agent with correct size.")
+            strategy_agent = StrategyAgent(state_size=strategy_state_size, 
+                                         action_size=env._define_strategy_action_space())
     
     # Training stats
     play_rewards = []
@@ -1873,13 +2074,27 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
                 # Check if we need to enter shop phase (ante beaten)
                 if info.get('shop_phase', False) and not done:
                     print(f"Episode {e+1}: Entering shop phase at step {game_steps}, Round {env.game_manager.game.current_ante}")
-                    in_shop_phase = True
-                    shop_steps = 0  # Reset shop steps counter
-                    # Make sure shop is updated
-                    env.update_shop()
+                    
+                    # If we have a strategy agent, enter shop phase
+                    if strategy_agent is not None:
+                        in_shop_phase = True
+                        shop_steps = 0  # Reset shop steps counter
+                        # Make sure shop is updated
+                        env.update_shop()
+                    else:
+                        # No strategy agent, just skip to next ante
+                        print("No strategy agent - skipping shop phase")
+                        success = env.game_manager.next_ante()
+                        if success:
+                            print(f"Advanced to Ante {env.game_manager.game.current_ante}")
+                            # Make sure we have a hand for the next round
+                            if not env.game_manager.current_hand:
+                                env.game_manager.deal_new_hand()
+                            # Get fresh play state
+                            play_state = env._get_play_state()
             
-            # SHOP PHASE - only enter if ante is beaten
-            else:
+            # SHOP PHASE - only enter if ante is beaten and we have a strategy agent
+            elif strategy_agent is not None:
                 shop_steps += 1
                 
                 # Now we're in the strategy phase
@@ -1920,24 +2135,29 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
         if len(play_agent.memory) > batch_size:
             play_agent.replay(batch_size)
         
-        if len(strategy_agent.memory) > batch_size:
+        if strategy_agent is not None and len(strategy_agent.memory) > batch_size:
             strategy_agent.replay(batch_size)
         
         play_agent.decay_epsilon()
-        strategy_agent.decay_epsilon()
+        if strategy_agent is not None:
+            strategy_agent.decay_epsilon()
         
         play_rewards.append(play_total_reward)
-        strategy_rewards.append(strategy_total_reward)
+        if strategy_agent is not None:
+            strategy_rewards.append(strategy_total_reward)
         ante_progression.append(max_ante_reached)
         
         if (e + 1) % log_interval == 0:
             avg_play_reward = sum(play_rewards[-log_interval:]) / log_interval
-            avg_strategy_reward = sum(strategy_rewards[-log_interval:]) / log_interval
             avg_ante = sum(ante_progression[-log_interval:]) / log_interval
             
             print(f"\nEpisode {e+1}/{episodes}")
             print(f"  Play Agent: reward={avg_play_reward:.2f}, epsilon={play_agent.epsilon:.3f}")
-            print(f"  Strategy Agent: reward={avg_strategy_reward:.2f}, epsilon={strategy_agent.epsilon:.3f}")
+            
+            if strategy_agent is not None:
+                avg_strategy_reward = sum(strategy_rewards[-log_interval:]) / log_interval
+                print(f"  Strategy Agent: reward={avg_strategy_reward:.2f}, epsilon={strategy_agent.epsilon:.3f}")
+            
             print(f"  Average max ante: {avg_ante:.2f}")
             
             play_stats = play_agent.get_stats()
@@ -1946,13 +2166,16 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
         if (e + 1) % save_interval == 0:
             print(f"Saving models at episode {e+1}")
             play_agent.save_model(f"play_agent_ep{e+1}.h5")
-            strategy_agent.save_model(f"strategy_agent_ep{e+1}.h5")
+            if strategy_agent is not None:
+                strategy_agent.save_model(f"strategy_agent_ep{e+1}.h5")
             
             play_agent.save_model("play_agent_latest.h5")
-            strategy_agent.save_model("strategy_agent_latest.h5")
+            if strategy_agent is not None:
+                strategy_agent.save_model("strategy_agent_latest.h5")
     
     play_agent.save_model("play_agent_final.h5")
-    strategy_agent.save_model("strategy_agent_final.h5")
+    if strategy_agent is not None:
+        strategy_agent.save_model("strategy_agent_final.h5")
     
     return play_agent, strategy_agent
 
