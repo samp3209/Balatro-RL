@@ -105,6 +105,7 @@ class BalatroEnv:
             if success:
                 print(f"Forcibly advanced to Ante {self.game_manager.game.current_ante}, Blind: {self.game_manager.game.current_blind}")
                 self.update_shop()
+                self.game_manager.current_ante_beaten = False
                 reward += 3.0  # Extra reward for breaking the loop
             else:
                 print("Failed to advance ante, setting game to done")
@@ -173,17 +174,19 @@ class BalatroEnv:
                     info['message'] = message
                     print(f"Used {tarot_name}: {message}")
         
-        elif action == 15:  # Skip (do nothing) - advance to next ante
+        elif action == 15:  # Skip (do nothing) - advance to next blind
             print("Skipping shop phase...")
             reward += 1.0  # Reward for progressing 
-            info['message'] = "Advancing to next ante"
+            info['message'] = "Advancing to next blind"
         
-        # After shop interaction, advance to next ante if needed
+        # After shop interaction, advance to next blind if needed
         if action == 15 or (self.game_manager.current_ante_beaten and not done):
+            print("Attempting to advance to next blind")
             success = self.game_manager.next_ante()
             
             if success:
-                # Update shop for the new ante
+                # Update shop for the new blind
+                print("Successfully advanced to next blind")
                 self.game_manager.current_ante_beaten = False
                 self.update_shop()
                 
@@ -202,13 +205,14 @@ class BalatroEnv:
                                     print(f"Used {tarot_name}: {message}")
                     self.pending_tarots = []
                 
-                # Additional reward for advancing to the next ante
+                # Additional reward for advancing to the next blind
                 reward += 2.0
                 print(f"Advanced to Ante {self.game_manager.game.current_ante}, Blind: {self.game_manager.game.current_blind}")
-            
+            else:
+                print("Failed to advance to next blind")
+                
         next_state = self._get_strategy_state()
         return next_state, reward, done, info
-    
 
     def step_play(self, action):
         """Process a playing action with stricter enforcement of rules"""
@@ -1504,10 +1508,50 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
         # Track game progress
         max_ante_reached = 1
         game_steps = 0
+        loop_detection_counter = 0
+        last_score = 0
+        last_shop_time = 0
         
         done = False
         while not done and game_steps < 1000:  # Safety limit
             game_steps += 1
+            
+            # Loop detection
+            if env.game_manager.current_ante_beaten:
+                loop_detection_counter += 1
+                if loop_detection_counter > 10:  # If stuck in beaten state for too many steps
+                    print(f"Loop detected! Forcing shop phase after {loop_detection_counter} steps in beaten state")
+                    # Force strategy phase
+                    strategy_state = env._get_strategy_state()
+                    strategy_action = 15  # Skip
+                    next_strategy_state, strategy_reward, strategy_done, _ = env.step_strategy(strategy_action)
+                    strategy_total_reward += strategy_reward
+                    done = strategy_done
+                    # Reset counter
+                    loop_detection_counter = 0
+                    # If not done, get fresh play state
+                    if not done:
+                        play_state = env._get_play_state()
+                    continue
+            else:
+                loop_detection_counter = 0  # Reset counter when not in beaten state
+            
+            # Score hasn't changed in many steps - potential loop
+            if last_score == env.game_manager.current_score:
+                if game_steps - last_shop_time > 50:  # Arbitrary threshold
+                    print("Score unchanged for many steps, checking for issues...")
+                    if env.game_manager.current_ante_beaten:
+                        print("Detected stuck in beaten state - forcing shop phase")
+                        strategy_state = env._get_strategy_state()
+                        strategy_action = 15  # Skip
+                        next_strategy_state, _, strategy_done, _ = env.step_strategy(strategy_action)
+                        done = strategy_done
+                        last_shop_time = game_steps
+                        if not done:
+                            play_state = env._get_play_state()
+                        continue
+            else:
+                last_score = env.game_manager.current_score
             
             # PLAY PHASE: Handle card playing/discarding
             valid_play_actions = env.get_valid_play_actions()
@@ -1524,6 +1568,9 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
             
             # SHOP PHASE: Handle if we need to enter shop/strategy phase
             if info.get('shop_phase', False) and not done:
+                print("Entering shop phase")
+                last_shop_time = game_steps
+                
                 # Now we're in the strategy phase
                 strategy_state = env._get_strategy_state()
                 valid_strategy_actions = env.get_valid_strategy_actions()
@@ -1541,6 +1588,15 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
                 # Reset play state after strategy phase
                 if not done:
                     play_state = env._get_play_state()
+                    
+                # Double-check we're not in beaten state after strategy phase
+                if env.game_manager.current_ante_beaten and not done:
+                    print("Warning: Still in beaten state after strategy phase, forcing another shop action")
+                    strategy_action = 15  # Skip action
+                    _, _, strategy_done, _ = env.step_strategy(strategy_action)
+                    done = strategy_done
+                    if not done:
+                        play_state = env._get_play_state()
         
         if len(play_agent.memory) > batch_size:
             play_agent.replay(batch_size)
