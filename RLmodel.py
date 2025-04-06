@@ -27,7 +27,8 @@ class BalatroEnv:
         
         self.game_manager = GameManager()
         self.game_manager.start_new_game()
-        
+        self.last_action_was_discard = False
+
         # Modify game settings based on config
         if self.config['simplified']:
             # Apply simplified settings
@@ -37,13 +38,18 @@ class BalatroEnv:
     def reset(self):
         self.game_manager = GameManager()
         self.game_manager.start_new_game()
+        self.last_action_was_discard = False
         return self._get_play_state()
     
 
     def step_play(self, action):
         # Process a playing action (select cards to play/discard)
         card_indices = self._convert_action_to_card_indices(action)
-        if self.is_discard_action(action):
+        
+        # Set the flag based on the action type
+        self.last_action_was_discard = self.is_discard_action(action)
+        
+        if self.last_action_was_discard:
             success, message = self.game_manager.discard_cards(card_indices)
         else:
             success, message = self.game_manager.play_cards(card_indices)
@@ -67,26 +73,49 @@ class BalatroEnv:
     
 
     def _get_play_state(self):
-        state = {
-            "cards_in_hand": self._encode_cards(self.game_manager.current_hand),
-            "hand_size": len(self.game_manager.current_hand),
-            
-            "current_ante": self.game_manager.game.current_ante,
-            "current_blind": self.game_manager.game.current_blind,
-            "current_score": self.game_manager.current_score,
-            "hands_played": self.game_manager.hands_played,
-            "max_hands": self.game_manager.max_hands_per_round,
-            "discards_used": self.game_manager.discards_used,
-            "max_discards": self.game_manager.max_discards_per_round,
-            
-            "is_boss_blind": self.game_manager.game.is_boss_blind,
-            "boss_blind_effect": self._encode_boss_blind_effect(),
-            
-            "joker_effects": self._encode_joker_effects(),
-        }
-
-        return state
-    
+        """Get the current state as a flat numpy array of floats with FIXED SIZE"""
+        state_features = []
+        
+        state_features.append(float(self.game_manager.game.current_ante))
+        state_features.append(float(self.game_manager.game.current_blind))
+        state_features.append(float(self.game_manager.current_score))
+        state_features.append(float(self.game_manager.hands_played))
+        state_features.append(float(self.game_manager.max_hands_per_round))
+        state_features.append(float(self.game_manager.discards_used))
+        state_features.append(float(self.game_manager.max_discards_per_round))
+        state_features.append(1.0 if self.game_manager.game.is_boss_blind else 0.0)
+        
+        
+        for i in range(8):
+            if i < len(self.game_manager.current_hand):
+                card = self.game_manager.current_hand[i]
+                
+                rank_value = float(card.rank.value) / 14.0
+                state_features.append(rank_value)
+                
+                suit_features = [0.0, 0.0, 0.0, 0.0]
+                if card.suit == Suit.HEARTS:
+                    suit_features[0] = 1.0
+                elif card.suit == Suit.DIAMONDS:
+                    suit_features[1] = 1.0
+                elif card.suit == Suit.CLUBS:
+                    suit_features[2] = 1.0
+                elif card.suit == Suit.SPADES:
+                    suit_features[3] = 1.0
+                state_features.extend(suit_features)
+                
+                enhancement_value = float(card.enhancement.value) / 12.0  # Normalize
+                state_features.append(enhancement_value)
+                
+                state_features.append(1.0 if card.face else 0.0)
+                state_features.append(1.0 if getattr(card, 'debuffed', False) else 0.0)
+            else:
+                state_features.extend([0.0] * 8)
+        
+        assert len(state_features) == 72, f"Expected 72 features, got {len(state_features)}"
+        
+        return np.array(state_features, dtype=np.float32)
+        
     def _get_strategy_state(self):
         state = {
             "current_ante": self.game_manager.game.current_ante,
@@ -120,20 +149,30 @@ class BalatroEnv:
         score_fraction = self.game_manager.current_score / self.game_manager.game.current_blind
         
         if self.game_manager.hand_result:
-            hand_quality = self.game_manager.hand_result.value / 9.0  
-            hand_reward = hand_quality * 0.5
+            # Exponentially higher rewards for better hands
+            hand_quality_map = {
+                HandType.HIGH_CARD: 0.01,
+                HandType.PAIR: 0.3,
+                HandType.TWO_PAIR: 0.8,
+                HandType.THREE_OF_A_KIND: 1.5,
+                HandType.STRAIGHT: 5,
+                HandType.FLUSH: 5,
+                HandType.FULL_HOUSE: 5.2,
+                HandType.FOUR_OF_A_KIND: 8.0,
+                HandType.STRAIGHT_FLUSH: 12.0
+            }
+            hand_reward = hand_quality_map.get(self.game_manager.hand_result, 0.1)
         else:
             hand_reward = 0
         
         discard_penalty = -0.05 * self.last_action_was_discard
-        
         wasted_hand_penalty = -0.1 if score_fraction < 0.1 else 0
+        ante_beaten_reward = 5.0 if self.game_manager.current_ante_beaten else 0
+        game_over_penalty = -3.0 if self.game_manager.game_over else 0
         
-        ante_beaten_reward = 1.0 if self.game_manager.current_ante_beaten else 0
+        cards_played_bonus = 0.05 * len(self.game_manager.played_cards) if not self.last_action_was_discard else 0
         
-        game_over_penalty = -1.0 if self.game_manager.game_over else 0
-        
-        return score_fraction + hand_reward + discard_penalty + wasted_hand_penalty + ante_beaten_reward + game_over_penalty
+        return score_fraction + hand_reward + discard_penalty + wasted_hand_penalty + ante_beaten_reward + game_over_penalty + cards_played_bonus
     
     def _calculate_strategy_reward(self):
         ante_progress = 0.2 * self.game_manager.game.current_ante
@@ -281,7 +320,7 @@ class BalatroEnv:
             # Cards required (normalized)
             cards_required = 0.0
             if consumable.type == ConsumableType.TAROT and hasattr(consumable.item, 'selected_cards_required'):
-                cards_required = consumable.item.selected_cards_required / 3.0  # Assume max is 3
+                cards_required = consumable.item.selected_cards_required / 3.0
             
             # Basic effects (simplified)
             affects_cards = 0.0
@@ -404,6 +443,89 @@ class BalatroEnv:
         
         return np.array(encoded)
 
+    def get_valid_play_actions(self):
+        """Return valid play actions based on current game state"""
+        valid_actions = []
+        
+        # If we can still play hands this round
+        if self.game_manager.hands_played < self.game_manager.max_hands_per_round:
+            # Actions to play cards
+            for i in range(min(256, 2**len(self.game_manager.current_hand))):
+                valid_actions.append(i)  # Play action
+        
+        # If we can still discard cards
+        if self.game_manager.discards_used < self.game_manager.max_discards_per_round:
+            # Actions to discard cards
+            for i in range(min(256, 2**len(self.game_manager.current_hand))):
+                valid_actions.append(i + 256)  # Discard action
+        
+        return valid_actions
+
+    def get_valid_strategy_actions(self):
+        """Return valid strategy actions based on current game state"""
+        valid_actions = []
+        
+        # Check which shop items we can afford
+        for i in range(4):  # 4 shop slots
+            if self.shop.items[i] is not None and self.game_manager.game.inventory.money >= self.shop.get_item_price(i):
+                valid_actions.append(i)  # Buy shop item
+        
+        # Check if we can sell jokers
+        for i in range(len(self.game_manager.game.inventory.jokers)):
+            valid_actions.append(i + 4)  # Sell joker
+        
+        # Check if we can use tarot cards
+        tarot_indices = self.game_manager.game.inventory.get_consumable_tarot_indices()
+        for i, tarot_idx in enumerate(tarot_indices):
+            if i < 2:  # Limit to first 2 tarots for simplicity
+                valid_actions.append(9 + i*3)  # Use tarot with no cards
+                valid_actions.append(10 + i*3)  # Use tarot with lowest cards
+                valid_actions.append(11 + i*3)  # Use tarot with highest cards
+        
+        # Always valid to skip
+        valid_actions.append(15)  # Skip action
+        
+        return valid_actions
+
+    def _convert_action_to_card_indices(self, action):
+        """
+        Convert an action integer into a list of card indices to play or discard
+        
+        Args:
+            action: Integer representing the action
+            
+        Returns:
+            List of card indices to play/discard
+        """
+        # First determine if this is a play or discard action (first bit)
+        action_type = action // 256  # For 8 cards, we have 2^8=256 possible combinations
+        
+        # Get the card selection part of the action
+        card_mask = action % 256
+        
+        # Convert to binary representation to determine which cards to select
+        binary = format(card_mask, '08b')  # 8-bit binary representation
+        
+        # Select cards where the corresponding bit is 1
+        card_indices = [i for i, bit in enumerate(reversed(binary)) if bit == '1']
+        
+        return card_indices
+
+    def is_discard_action(self, action):
+        """
+        Check if an action is a discard (vs play) action
+        
+        Args:
+            action: Integer representing the action
+            
+        Returns:
+            Boolean indicating if this is a discard action
+        """
+        return action >= 256
+
+
+
+
 class PlayingAgent:
     def __init__(self, state_size, action_size, learning_rate=0.001):
         self.state_size = state_size
@@ -428,7 +550,7 @@ class PlayingAgent:
         self.DISCARD_ACTION = 1
         
     def _build_model(self):
-        """Build a neural network for predicting Q-values"""
+        """Build a neural network for predicting Q-values with the correct input size"""
         model = Sequential()
         model.add(Dense(128, input_dim=self.state_size, activation='relu'))
         model.add(Dropout(0.1))
@@ -449,13 +571,15 @@ class PlayingAgent:
         
         # Track rewards for analytics
         self.recent_rewards.append(reward)
-    
+        
     def act(self, state, valid_actions=None):
         """Choose an action using epsilon-greedy policy"""
-        # Convert state to array if needed
+        # Make sure state is a numpy array of proper type
         if not isinstance(state, np.ndarray):
-            state = np.array(state).reshape(1, -1)
-        else:
+            state = np.array(state, dtype=np.float32)
+            
+        # Ensure state is the right shape for the model
+        if len(state.shape) == 1:
             state = state.reshape(1, -1)
         
         # Explore: choose random action
@@ -469,7 +593,7 @@ class PlayingAgent:
         
         # Handle valid actions mask if provided
         if valid_actions is not None and len(valid_actions) > 0:
-            mask = np.ones(self.action_size) * -1000000  # Large negative value
+            mask = np.full(self.action_size, -1e6)  # Large negative value
             for action in valid_actions:
                 mask[action] = 0
             act_values = act_values + mask
@@ -499,12 +623,54 @@ class PlayingAgent:
         # Sample random batch from memory
         minibatch = random.sample(self.memory, batch_size)
         
-        # Extract data
-        states = np.array([experience[0] for experience in minibatch])
-        actions = np.array([experience[1] for experience in minibatch])
-        rewards = np.array([experience[2] for experience in minibatch])
-        next_states = np.array([experience[3] for experience in minibatch])
-        dones = np.array([experience[4] for experience in minibatch])
+        # Pre-process states and next_states to ensure consistent shapes
+        states = []
+        actions = []
+        rewards = []
+        next_states = []
+        dones = []
+        
+        for experience in minibatch:
+            state, action, reward, next_state, done = experience
+            
+            # Convert to numpy arrays of consistent shape if needed
+            if not isinstance(state, np.ndarray):
+                state = np.array(state, dtype=np.float32)
+            
+            if not isinstance(next_state, np.ndarray):
+                next_state = np.array(next_state, dtype=np.float32)
+            
+            # Ensure all states have the same shape
+            if len(state.shape) > 1:
+                state = state.flatten()
+                
+            if len(next_state.shape) > 1:
+                next_state = next_state.flatten()
+                
+            states.append(state)
+            actions.append(action)
+            rewards.append(reward)
+            next_states.append(next_state)
+            dones.append(done)
+        
+        # Convert to numpy arrays with consistent shapes
+        # Find the maximum length to pad all states to the same size
+        max_state_length = max(len(state) for state in states)
+        max_next_state_length = max(len(next_state) for next_state in next_states)
+        
+        # Pad states if needed
+        for i in range(len(states)):
+            if len(states[i]) < max_state_length:
+                states[i] = np.pad(states[i], (0, max_state_length - len(states[i])), 'constant')
+            if len(next_states[i]) < max_next_state_length:
+                next_states[i] = np.pad(next_states[i], (0, max_next_state_length - len(next_states[i])), 'constant')
+        
+        # Convert to numpy arrays
+        states = np.array(states, dtype=np.float32)
+        actions = np.array(actions)
+        rewards = np.array(rewards, dtype=np.float32)
+        next_states = np.array(next_states, dtype=np.float32)
+        dones = np.array(dones, dtype=np.float32)
         
         # Predict current Q values
         targets = self.model.predict(states, verbose=0)
@@ -694,11 +860,23 @@ class StrategyAgent:
         self.target_model.set_weights(self.model.get_weights())
     
     def remember(self, state, action, reward, next_state, done):
-        """Store experience in memory"""
+        """Store experience in replay memory"""
+        # Ensure consistent state format
+        if not isinstance(state, np.ndarray):
+            state = np.array(state, dtype=np.float32)
+        if not isinstance(next_state, np.ndarray):
+            next_state = np.array(next_state, dtype=np.float32)
+        
+        # Flatten multi-dimensional states for consistency
+        if len(state.shape) > 1:
+            state = state.flatten()
+        if len(next_state.shape) > 1:
+            next_state = next_state.flatten()
+            
         self.memory.append((state, action, reward, next_state, done))
         
+        # Track rewards for analytics
         self.recent_rewards.append(reward)
-        self.recent_actions.append(action)
     
     def act(self, state, valid_actions=None):
         """Choose an action based on the current state"""
@@ -844,50 +1022,6 @@ class StrategyAgent:
         return history.history['loss'][0]
 
 
-def get_valid_play_actions(self):
-    """Return valid play actions based on current game state"""
-    valid_actions = []
-    
-    # If we can still play hands this round
-    if self.game_manager.hands_played < self.game_manager.max_hands_per_round:
-        # Actions to play cards
-        for i in range(min(256, 2**len(self.game_manager.current_hand))):
-            valid_actions.append(i)  # Play action
-    
-    # If we can still discard cards
-    if self.game_manager.discards_used < self.game_manager.max_discards_per_round:
-        # Actions to discard cards
-        for i in range(min(256, 2**len(self.game_manager.current_hand))):
-            valid_actions.append(i + 256)  # Discard action
-    
-    return valid_actions
-
-def get_valid_strategy_actions(self):
-    """Return valid strategy actions based on current game state"""
-    valid_actions = []
-    
-    # Check which shop items we can afford
-    for i in range(4):  # 4 shop slots
-        if self.shop.items[i] is not None and self.game_manager.game.inventory.money >= self.shop.get_item_price(i):
-            valid_actions.append(i)  # Buy shop item
-    
-    # Check if we can sell jokers
-    for i in range(len(self.game_manager.game.inventory.jokers)):
-        valid_actions.append(i + 4)  # Sell joker
-    
-    # Check if we can use tarot cards
-    tarot_indices = self.game_manager.game.inventory.get_consumable_tarot_indices()
-    for i, tarot_idx in enumerate(tarot_indices):
-        if i < 2:  # Limit to first 2 tarots for simplicity
-            valid_actions.append(9 + i*3)  # Use tarot with no cards
-            valid_actions.append(10 + i*3)  # Use tarot with lowest cards
-            valid_actions.append(11 + i*3)  # Use tarot with highest cards
-    
-    # Always valid to skip
-    valid_actions.append(15)  # Skip action
-    
-    return valid_actions
-
 def train_with_curriculum():
     # Phase 1: Train with simplified game (no boss blinds, fixed deck)
     print("Phase 1: Learning basic card play...")
@@ -919,28 +1053,29 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
     # Print what configuration is being used
     print(f"Training with config: {game_config}")
     
-    env = BalatroEnv()
-    
-    # Use provided agents or create new ones
+    env = BalatroEnv(config=game_config)
+    initial_play_state = env._get_play_state()
+    play_state_size = len(initial_play_state)
+
+    # Initialize agents as needed
     if play_agent is None:
-        play_agent = PlayingAgent(state_size=len(env._get_play_state()), 
-                                  action_size=env._define_play_action_space())
+        print(f"Creating new PlayingAgent with state_size={play_state_size}")
+        play_agent = PlayingAgent(state_size=play_state_size, 
+                                action_size=env._define_play_action_space())
     
     if strategy_agent is None:  
         strategy_agent = StrategyAgent(state_size=len(env._get_strategy_state()), 
                                       action_size=env._define_strategy_action_space())
     
-    # Initialize state sizes
-    play_state = env._get_play_state()
-    play_state_size = len(np.array(play_state).flatten()) if isinstance(play_state, (list, np.ndarray)) else len(play_state)
-    
     strategy_state = env._get_strategy_state()
     strategy_state_size = len(np.array(strategy_state).flatten()) if isinstance(strategy_state, (list, np.ndarray)) else len(strategy_state)
     
-    # Initialize agents if not provided
+
+    play_state = env._get_play_state()
+    play_state_size = len(np.array(play_state, dtype=float).flatten())
     if play_agent is None:
         play_agent = PlayingAgent(state_size=play_state_size, 
-                                  action_size=env._define_play_action_space())
+                                action_size=env._define_play_action_space())
     
     if strategy_agent is None:
         strategy_agent = StrategyAgent(state_size=strategy_state_size, 

@@ -269,7 +269,7 @@ class Inventory:
             print(f"WARNING: Deck initialized with {len(self.deck)} cards, expected 52")
         
         # Print deck distribution for debugging
-        self._print_deck_distribution()
+        #self._print_deck_distribution()
 
     def _print_deck_distribution(self):
         """Print the distribution of cards in the deck by rank and suit"""
