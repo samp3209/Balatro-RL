@@ -4,6 +4,8 @@ import numpy as np
 from Inventory import Inventory
 from Card import Card
 from Enums import *
+from Shop import Shop, ShopItem, ShopItemType, initialize_shops_for_game, FixedShop
+
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Flatten, Conv1D, MaxPooling1D, Dropout, LSTM
@@ -17,10 +19,10 @@ class BalatroEnv:
         self.game_manager = GameManager()
         self.game_manager.start_new_game()
         self.config = {
-        'simplified': False,  # Simplified rules for initial learning
-        'full_features': False  # All game features enabled
+            'simplified': False,  # Simplified rules for initial learning
+            'full_features': False  # All game features enabled
         }
-    
+        
         # Update with provided config
         if config:
             self.config.update(config)
@@ -28,21 +30,195 @@ class BalatroEnv:
         self.game_manager = GameManager()
         self.game_manager.start_new_game()
         self.last_action_was_discard = False
-
-        # Modify game settings based on config
+        
+        self.all_shops = initialize_shops_for_game()
+        self.current_shop = None
+        self.pending_tarots = []
+        
+        self.episode_step = 0
+        self.episode_max_blind = 0
+        
         if self.config['simplified']:
-            # Apply simplified settings
             self.game_manager.game.is_boss_blind = False
             self.game_manager.max_hands_per_round = 4
 
     def reset(self):
+        """Reset the environment to initial state"""
         self.game_manager = GameManager()
         self.game_manager.start_new_game()
         self.last_action_was_discard = False
+        self.episode_step = 0
+        self.episode_max_blind = 0
+        self.pending_tarots = []
+        
+        self.update_shop()
+        
+        print(f"\n===== STARTING NEW EPISODE =====")
+        print(f"Current Ante: {self.game_manager.game.current_ante}, Blind: {self.game_manager.game.current_blind}")
+        print(f"Money: ${self.game_manager.game.inventory.money}")
+        
         return self._get_play_state()
     
+    def update_shop(self):
+        """Update the shop for the current ante"""
+        if not hasattr(self, 'all_shops') or self.all_shops is None:
+            try:
+                from Shop import initialize_shops_for_game
+                self.all_shops = initialize_shops_for_game()
+            except ImportError:
+                self.all_shops = {}
+                print("Warning: Could not import shop initialization functions")
+        
+        current_ante = self.game_manager.game.current_ante
+        ante_number = ((current_ante - 1) // 3) + 1
+        
+        blind_type_map = {
+            0: "boss_blind",
+            1: "small_blind", 
+            2: "medium_blind"
+        }
+        
+        blind_type = blind_type_map[current_ante % 3]
+        
+        if ante_number in self.all_shops and blind_type in self.all_shops[ante_number]:
+            self.current_shop = self.all_shops[ante_number][blind_type]
+            print(f"Updated shop for Ante {current_ante} ({blind_type})")
+        else:
+            from Shop import Shop
+            self.current_shop = Shop()
+            print(f"Created default shop for Ante {current_ante}")
 
+    def step_strategy(self, action):
+        """Process a strategy action (shop purchase, tarot use, etc.)"""
+        # Make sure we have the current shop
+        if not hasattr(self, 'current_shop') or self.current_shop is None:
+            self.update_shop()
+        
+        reward = 0
+        done = self.game_manager.game_over
+        info = {"message": "Unknown action"}
+        
+        # Debug info about available actions
+        if self.episode_step % 10 == 0:  # Only print occasionally
+            print(f"\n===== SHOP PHASE =====")
+            print(f"Money: ${self.game_manager.game.inventory.money}")
+            print(f"Available jokers: {[j.name for j in self.game_manager.game.inventory.jokers]}")
+            print(f"Available consumables: {len(self.game_manager.game.inventory.consumables)}")
+        
+        # Handle different action types
+        if action < 4:  # Buy shop item
+            slot = action
+            if self.current_shop and slot < len(self.current_shop.items) and self.current_shop.items[slot] is not None:
+                item_price = self.current_shop.get_item_price(slot)
+                
+                if self.game_manager.game.inventory.money >= item_price:
+                    item_name = self.current_shop.items[slot].get_name() if hasattr(self.current_shop.items[slot], 'get_name') else "Item"
+                    success = self.current_shop.buy_item(slot, self.game_manager.game.inventory)
+                    
+                    if success:
+                        reward += 0.5  # Reward for successful purchase
+                        info['message'] = f"Bought {item_name} for ${item_price}"
+                        print(f"Bought {item_name} for ${item_price}")
+                        
+                        # Handle special case for tarot cards
+                        if hasattr(self.current_shop.items[slot], 'item_type') and \
+                        self.current_shop.items[slot].item_type == ShopItemType.TAROT:
+                            self.pending_tarots.append(item_name)
+                else:
+                    info['message'] = f"Not enough money to buy item (costs ${item_price})"
+        
+        elif action < 9:  # Sell joker
+            joker_idx = action - 4
+            if joker_idx < len(self.game_manager.game.inventory.jokers):
+                joker_name = self.game_manager.game.inventory.jokers[joker_idx].name
+                sell_value = self.current_shop.sell_item("joker", joker_idx, self.game_manager.game.inventory)
+                if sell_value > 0:
+                    reward += 0.2  # Reward for selling
+                    info['message'] = f"Sold {joker_name} for ${sell_value}"
+                    print(f"Sold {joker_name} for ${sell_value}")
+        
+        elif action < 15:  # Use tarot cards with different strategies
+            tarot_idx = (action - 9) // 3
+            selection_strategy = (action - 9) % 3
+            
+            tarot_indices = self.game_manager.game.inventory.get_consumable_tarot_indices()
+            if tarot_indices and tarot_idx < len(tarot_indices):
+                actual_idx = tarot_indices[tarot_idx]
+                tarot_name = self.game_manager.game.inventory.consumables[actual_idx].item.name
+                
+                # Get card selection based on strategy
+                selected_indices = []
+                if selection_strategy > 0 and self.game_manager.current_hand:
+                    if selection_strategy == 1:  # Lowest cards
+                        cards_by_value = [(i, card.rank.value) for i, card in enumerate(self.game_manager.current_hand)]
+                        cards_by_value.sort(key=lambda x: x[1])
+                        selected_indices = [idx for idx, _ in cards_by_value[:3]]
+                    else:  # Highest cards
+                        cards_by_value = [(i, card.rank.value) for i, card in enumerate(self.game_manager.current_hand)]
+                        cards_by_value.sort(key=lambda x: x[1], reverse=True)
+                        selected_indices = [idx for idx, _ in cards_by_value[:3]]
+                
+                success, message = self.game_manager.use_tarot(actual_idx, selected_indices)
+                if success:
+                    reward += 0.8  # Higher reward for using tarot
+                    info['message'] = message
+                    print(f"Used {tarot_name}: {message}")
+        
+        elif action == 15:  # Skip (do nothing) - advance to next ante
+            print("Skipping shop phase...")
+            reward += 1.0  # Reward for progressing 
+            info['message'] = "Advancing to next ante"
+        
+        # After shop interaction, advance to next ante if needed
+        if action == 15 or (self.game_manager.current_ante_beaten and not done):
+            current_ante = self.game_manager.game.current_ante
+            success = self.game_manager.next_ante()
+            
+            if success:
+                # Update shop for the new ante
+                self.update_shop()
+                
+                # Use any pending tarots
+                if self.pending_tarots and self.game_manager.current_hand:
+                    print("\n=== Using Tarot Cards From Shop ===")
+                    for tarot_name in self.pending_tarots:
+                        tarot_indices = self.game_manager.game.inventory.get_consumable_tarot_indices()
+                        for idx in tarot_indices:
+                            consumable = self.game_manager.game.inventory.consumables[idx]
+                            if hasattr(consumable.item, 'name') and consumable.item.name == tarot_name:
+                                tarot_idx = idx
+                                selected_indices = []  # Simple strategy for now
+                                success, message = self.game_manager.use_tarot(tarot_idx, selected_indices)
+                                if success:
+                                    print(f"Used {tarot_name}: {message}")
+                    self.pending_tarots = []
+                
+                # Additional reward for advancing to the next ante
+                reward += 2.0
+                print(f"Advanced to Ante {self.game_manager.game.current_ante}, Blind: {self.game_manager.game.current_blind}")
+        
+        next_state = self._get_strategy_state()
+        return next_state, reward, done, info
     def step_play(self, action):
+        """Process a playing action (select cards to play/discard)"""
+        self.episode_step += 1
+        
+        # Track current game state for debugging
+        blind_type = "Small"
+        if self.game_manager.game.current_ante % 3 == 2:
+            blind_type = "Medium"
+        elif self.game_manager.game.current_ante % 3 == 0:
+            blind_type = "Boss"
+            
+        current_ante_number = ((self.game_manager.game.current_ante - 1) // 3) + 1
+        self.episode_max_blind = max(self.episode_max_blind, self.game_manager.game.current_ante)
+        
+        if self.episode_step % 10 == 0:  # Only print occasionally to reduce output
+            print(f"\n----- Step {self.episode_step}: Ante {current_ante_number}, {blind_type} Blind: {self.game_manager.game.current_blind} -----")
+            print(f"Hand {self.game_manager.hands_played + 1}/{self.game_manager.max_hands_per_round}, " + 
+                f"Discards Used: {self.game_manager.discards_used}/{self.game_manager.max_discards_per_round}, " + 
+                f"Score: {self.game_manager.current_score}/{self.game_manager.game.current_blind}")
+        
         # Process a playing action (select cards to play/discard)
         card_indices = self._convert_action_to_card_indices(action)
         
@@ -54,24 +230,30 @@ class BalatroEnv:
         else:
             success, message = self.game_manager.play_cards(card_indices)
         
+        # Calculate reward based on outcome
         reward = self._calculate_play_reward()
-        done = self.game_manager.game_over or self.game_manager.current_ante_beaten
+        
+        # Check if blind is beaten or game is over
+        done = self.game_manager.game_over
+        shop_phase = self.game_manager.current_ante_beaten and not done
+        
+        # If the ante is beaten, setup for the shop phase
+        if shop_phase:
+            print(f"\n***** ANTE {self.game_manager.game.current_ante} BEATEN! *****")
+            print(f"Score: {self.game_manager.current_score}/{self.game_manager.game.current_blind}")
+            print(f"Moving to shop phase")
+        
         next_state = self._get_play_state()
         
-        return next_state, reward, done, {"message": message}
-    
-
-    def step_strategy(self, action):
-        # Process a strategy action (shop purchase, tarot use, etc.)
-        # ...
+        info = {
+            "message": message,
+            "shop_phase": shop_phase, 
+            "current_ante": self.game_manager.game.current_ante,
+            "current_blind": self.game_manager.game.current_blind,
+            "current_score": self.game_manager.current_score
+        }
         
-        reward = self._calculate_strategy_reward()
-        done = self.game_manager.game_over
-        next_state = self._get_strategy_state()
-        
-        return next_state, reward, done, {}
-    
-
+        return next_state, reward, done, info
     def _get_play_state(self):
         """Get the current state as a flat numpy array of floats with FIXED SIZE"""
         state_features = []
@@ -117,21 +299,46 @@ class BalatroEnv:
         return np.array(state_features, dtype=np.float32)
         
     def _get_strategy_state(self):
-        state = {
-            "current_ante": self.game_manager.game.current_ante,
-            "current_blind": self.game_manager.game.current_blind,
-            "money": self.game_manager.game.inventory.money,
-            
-            "jokers": self._encode_jokers(self.game_manager.game.inventory.jokers),
-            "joker_count": len(self.game_manager.game.inventory.jokers),
-            "consumables": self._encode_consumables(),
-            
-            "shop_items": self._encode_shop_items(),
-            
-            "planet_levels": self._encode_planet_levels(),
-        }
-
-        return state
+        """Get the current strategy state as a flat numpy array"""
+        state_features = []
+        
+        state_features.append(float(self.game_manager.game.current_ante))
+        state_features.append(float(self.game_manager.game.current_blind))
+        state_features.append(float(self.game_manager.game.inventory.money))
+        state_features.append(float(len(self.game_manager.game.inventory.jokers)))
+        state_features.append(float(len(self.game_manager.game.inventory.consumables)))
+        state_features.append(1.0 if self.game_manager.game.is_boss_blind else 0.0)
+        
+        boss_effect = [0.0] * len(BossBlindEffect)
+        if self.game_manager.game.is_boss_blind and self.game_manager.game.active_boss_blind_effect:
+            boss_effect[self.game_manager.game.active_boss_blind_effect.value - 1] = 1.0
+        state_features.extend(boss_effect)
+        
+        joker_features = [0.0] * 10
+        for i, joker in enumerate(self.game_manager.game.inventory.jokers[:5]):
+            if joker:
+                joker_features[i*2] = joker.sell_value / 5.0
+                joker_features[i*2+1] = 1.0 if joker.rarity == "uncommon" else 0.5
+        state_features.extend(joker_features)
+        
+        if hasattr(self, 'shop'):
+            for i in range(4):
+                if i < len(self.shop.items) and self.shop.items[i] is not None:
+                    state_features.append(1.0)
+                    state_features.append(float(self.shop.get_item_price(i)) / 10.0) 
+                    
+                    item_type_features = [0.0] * len(ShopItemType)
+                    item_type_features[self.shop.items[i].item_type.value - 1] = 1.0
+                    state_features.extend(item_type_features)
+                else:
+                    state_features.append(0.0)
+                    state_features.append(0.0)
+                    state_features.extend([0.0] * len(ShopItemType))
+        else:
+            for _ in range(4 * (2 + len(ShopItemType))):
+                state_features.append(0.0)
+        
+        return np.array(state_features, dtype=np.float32)
     
     def _define_play_action_space(self):
         # 0 or 1 (play vs discard)
@@ -146,10 +353,11 @@ class BalatroEnv:
         return 26
 
     def _calculate_play_reward(self):
+        """Calculate reward for play actions"""
         score_fraction = self.game_manager.current_score / self.game_manager.game.current_blind
         
+        hand_reward = 0
         if self.game_manager.hand_result:
-            # Exponentially higher rewards for better hands
             hand_quality_map = {
                 HandType.HIGH_CARD: 0.01,
                 HandType.PAIR: 0.3,
@@ -162,17 +370,33 @@ class BalatroEnv:
                 HandType.STRAIGHT_FLUSH: 12.0
             }
             hand_reward = hand_quality_map.get(self.game_manager.hand_result, 0.1)
-        else:
-            hand_reward = 0
         
         discard_penalty = -0.05 * self.last_action_was_discard
+        
         wasted_hand_penalty = -0.1 if score_fraction < 0.1 else 0
+        
         ante_beaten_reward = 5.0 if self.game_manager.current_ante_beaten else 0
+        
         game_over_penalty = -3.0 if self.game_manager.game_over else 0
         
         cards_played_bonus = 0.05 * len(self.game_manager.played_cards) if not self.last_action_was_discard else 0
         
-        return score_fraction + hand_reward + discard_penalty + wasted_hand_penalty + ante_beaten_reward + game_over_penalty + cards_played_bonus
+        progress_bonus = 0.1 * self.game_manager.game.current_ante
+        
+        if self.episode_step % 10 == 0:
+            reward_components = { 
+                "score_fraction": score_fraction,
+                "hand_reward": hand_reward,
+                "discard_penalty": discard_penalty,
+                "wasted_hand_penalty": wasted_hand_penalty,
+                "ante_beaten_reward": ante_beaten_reward,
+                "game_over_penalty": game_over_penalty,
+                "cards_played_bonus": cards_played_bonus,
+                "progress_bonus": progress_bonus
+            }
+            print(f"Reward components: {reward_components}")
+        
+        return score_fraction + hand_reward + discard_penalty + wasted_hand_penalty + ante_beaten_reward + game_over_penalty + cards_played_bonus + progress_bonus
     
     def _calculate_strategy_reward(self):
         ante_progress = 0.2 * self.game_manager.game.current_ante
@@ -465,14 +689,20 @@ class BalatroEnv:
         """Return valid strategy actions based on current game state"""
         valid_actions = []
         
+        # Create shop if it doesn't exist yet
+        if not hasattr(self, 'current_shop') or self.current_shop is None:
+            self.update_shop()
+        
         # Check which shop items we can afford
         for i in range(4):  # 4 shop slots
-            if self.shop.items[i] is not None and self.game_manager.game.inventory.money >= self.shop.get_item_price(i):
+            if i < len(self.current_shop.items) and self.current_shop.items[i] is not None and \
+            self.game_manager.game.inventory.money >= self.current_shop.get_item_price(i):
                 valid_actions.append(i)  # Buy shop item
         
         # Check if we can sell jokers
         for i in range(len(self.game_manager.game.inventory.jokers)):
-            valid_actions.append(i + 4)  # Sell joker
+            if i < 5:  # Limit to max 5 jokers
+                valid_actions.append(i + 4)  # Sell joker
         
         # Check if we can use tarot cards
         tarot_indices = self.game_manager.game.inventory.get_consumable_tarot_indices()
@@ -484,6 +714,10 @@ class BalatroEnv:
         
         # Always valid to skip
         valid_actions.append(15)  # Skip action
+        
+        # If no valid actions, can always skip
+        if not valid_actions:
+            valid_actions.append(15)
         
         return valid_actions
 
@@ -1022,10 +1256,54 @@ class StrategyAgent:
         return history.history['loss'][0]
 
 
+def get_valid_strategy_actions(self):
+    """Return valid strategy actions based on current game state"""
+    valid_actions = []
+    
+    # Create shop if it doesn't exist yet
+    if not hasattr(self, 'shop'):
+        from Shop import Shop
+        self.shop = Shop()
+    
+    # Check which shop items we can afford
+    for i in range(4):  # 4 shop slots
+        if i < len(self.shop.items) and self.shop.items[i] is not None and \
+           self.game_manager.game.inventory.money >= self.shop.get_item_price(i):
+            valid_actions.append(i)  # Buy shop item
+    
+    # Check if we can sell jokers
+    for i in range(len(self.game_manager.game.inventory.jokers)):
+        if i < 5:  # Limit to max 5 jokers
+            valid_actions.append(i + 4)  # Sell joker
+    
+    # Check if we can use tarot cards
+    tarot_indices = self.game_manager.game.inventory.get_consumable_tarot_indices()
+    for i, tarot_idx in enumerate(tarot_indices):
+        if i < 2:  # Limit to first 2 tarots for simplicity
+            valid_actions.append(9 + i*3)  # Use tarot with no cards
+            valid_actions.append(10 + i*3)  # Use tarot with lowest cards
+            valid_actions.append(11 + i*3)  # Use tarot with highest cards
+    
+    valid_actions.append(15)
+    
+    if not valid_actions:
+        valid_actions.append(15)
+    
+    return valid_actions
+
+
 def train_with_curriculum():
     # Phase 1: Train with simplified game (no boss blinds, fixed deck)
     print("Phase 1: Learning basic card play...")
-    play_agent, _ = train_agents(episodes=2000, game_config={'simplified': True})
+    play_agent, strategy_agent = train_agents(episodes=2000, game_config={'simplified': True})
+    
+    if play_agent is None:
+        # Create a default agent if training failed
+        env = BalatroEnv(config={'simplified': True})
+        play_state = env._get_play_state()
+        play_state_size = len(play_state)
+        play_agent = PlayingAgent(state_size=play_state_size, 
+                                 action_size=env._define_play_action_space())
     
     # Phase 2: Include boss blinds and shop interaction
     print("Phase 2: Adding boss blinds and shop strategy...")
@@ -1054,32 +1332,22 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
     print(f"Training with config: {game_config}")
     
     env = BalatroEnv(config=game_config)
+    
+    # Initialize play agent
     initial_play_state = env._get_play_state()
     play_state_size = len(initial_play_state)
-
-    # Initialize agents as needed
     if play_agent is None:
         print(f"Creating new PlayingAgent with state_size={play_state_size}")
         play_agent = PlayingAgent(state_size=play_state_size, 
                                 action_size=env._define_play_action_space())
     
-    if strategy_agent is None:  
-        strategy_agent = StrategyAgent(state_size=len(env._get_strategy_state()), 
-                                      action_size=env._define_strategy_action_space())
-    
+    # Initialize strategy agent
     strategy_state = env._get_strategy_state()
-    strategy_state_size = len(np.array(strategy_state).flatten()) if isinstance(strategy_state, (list, np.ndarray)) else len(strategy_state)
-    
-
-    play_state = env._get_play_state()
-    play_state_size = len(np.array(play_state, dtype=float).flatten())
-    if play_agent is None:
-        play_agent = PlayingAgent(state_size=play_state_size, 
-                                action_size=env._define_play_action_space())
-    
-    if strategy_agent is None:
+    strategy_state_size = len(strategy_state)
+    if strategy_agent is None:  
+        print(f"Creating new StrategyAgent with state_size={strategy_state_size}")
         strategy_agent = StrategyAgent(state_size=strategy_state_size, 
-                                      action_size=env._define_strategy_action_space())
+                                     action_size=env._define_strategy_action_space())
     
     # Training stats
     play_rewards = []
@@ -1099,29 +1367,29 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
         while not done and game_steps < 1000:  # Safety limit
             game_steps += 1
             
-            # Playing phase
-            valid_play_actions = env.get_valid_play_actions()  # Implement this helper method
+            # PLAY PHASE: Handle card playing/discarding
+            valid_play_actions = env.get_valid_play_actions()
             play_action = play_agent.act(play_state, valid_actions=valid_play_actions)
             next_play_state, play_reward, done, info = env.step_play(play_action)
             
-            # Remember experience
+            # Remember play experience
             play_agent.remember(play_state, play_action, play_reward, next_play_state, done)
             play_state = next_play_state
             play_total_reward += play_reward
             
-            # Track performance data
-            if hasattr(env.game_manager, 'hand_result') and env.game_manager.hand_result:
-                play_agent.track_hand_played(env.game_manager.hand_result, env.game_manager.played_cards)
-            
+            # Track game progress
             max_ante_reached = max(max_ante_reached, env.game_manager.game.current_ante)
             
-            # Strategy phase (after beating an ante)
-            if env.game_manager.current_ante_beaten and not done:
+            # SHOP PHASE: Handle if we need to enter shop/strategy phase
+            if info.get('shop_phase', False) and not done:
+                # Now we're in the strategy phase
                 strategy_state = env._get_strategy_state()
-                valid_strategy_actions = env.get_valid_strategy_actions()  # Implement this helper
-                strategy_action = strategy_agent.act(strategy_state, valid_strategy_actions)
+                valid_strategy_actions = env.get_valid_strategy_actions()
+                strategy_action = strategy_agent.act(strategy_state, valid_actions=valid_strategy_actions)
                 
-                next_strategy_state, strategy_reward, strategy_done, _ = env.step_strategy(strategy_action)
+                next_strategy_state, strategy_reward, strategy_done, strategy_info = env.step_strategy(strategy_action)
+                
+                # Remember strategy experience
                 strategy_agent.remember(strategy_state, strategy_action, strategy_reward, 
                                        next_strategy_state, strategy_done)
                 
@@ -1132,34 +1400,29 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
                 if not done:
                     play_state = env._get_play_state()
         
-        # Learn from experiences
-        if len(play_agent.memory) > 64:
-            play_loss = play_agent.replay(64)
+        if len(play_agent.memory) > batch_size:
+            play_agent.replay(batch_size)
         
-        if len(strategy_agent.memory) > 64:
-            strategy_loss = strategy_agent.replay(64)
+        if len(strategy_agent.memory) > batch_size:
+            strategy_agent.replay(batch_size)
         
-        # Decay exploration rates
         play_agent.decay_epsilon()
         strategy_agent.decay_epsilon()
         
-        # Record stats
         play_rewards.append(play_total_reward)
         strategy_rewards.append(strategy_total_reward)
         ante_progression.append(max_ante_reached)
         
-        # Logging and saving
         if (e + 1) % log_interval == 0:
             avg_play_reward = sum(play_rewards[-log_interval:]) / log_interval
             avg_strategy_reward = sum(strategy_rewards[-log_interval:]) / log_interval
             avg_ante = sum(ante_progression[-log_interval:]) / log_interval
             
-            print(f"Episode {e+1}/{episodes}")
+            print(f"\nEpisode {e+1}/{episodes}")
             print(f"  Play Agent: reward={avg_play_reward:.2f}, epsilon={play_agent.epsilon:.3f}")
             print(f"  Strategy Agent: reward={avg_strategy_reward:.2f}, epsilon={strategy_agent.epsilon:.3f}")
             print(f"  Average max ante: {avg_ante:.2f}")
             
-            # Print additional stats
             play_stats = play_agent.get_stats()
             print(f"  Play stats: {play_stats}")
         
@@ -1168,11 +1431,9 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
             play_agent.save_model(f"play_agent_ep{e+1}.h5")
             strategy_agent.save_model(f"strategy_agent_ep{e+1}.h5")
             
-            # Also save final models with a fixed name for easier loading
             play_agent.save_model("play_agent_latest.h5")
             strategy_agent.save_model("strategy_agent_latest.h5")
     
-    # Save final models
     play_agent.save_model("play_agent_final.h5")
     strategy_agent.save_model("strategy_agent_final.h5")
     
@@ -1258,7 +1519,6 @@ if __name__ == "__main__":
     # Train from scratch
     play_agent, strategy_agent = train_with_curriculum()
     
-    # Or load pre-trained models and continue training
     # play_agent = PlayingAgent(state_size=STATE_SIZE, action_size=ACTION_SIZE)
     # play_agent.load_model("play_agent_latest.h5")
     # strategy_agent = StrategyAgent(state_size=STATE_SIZE, action_size=ACTION_SIZE)
@@ -1268,7 +1528,6 @@ if __name__ == "__main__":
     #                                          play_agent=play_agent,
     #                                          strategy_agent=strategy_agent)
     
-    # Evaluate the trained agents
     results = evaluate_agents(play_agent, strategy_agent)
     print("Evaluation Results:")
     print(f"  Win Rate: {results['win_rate']:.2f}%")
