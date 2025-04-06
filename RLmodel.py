@@ -55,14 +55,26 @@ class BalatroEnv:
         print(f"Money: ${self.game_manager.game.inventory.money}")
 
     def reset(self):
-        """Reset the environment to initial state"""
+        """Reset the environment to initial state with a completely fresh game"""
         self.last_action_was_discard = False
         self.episode_step = 0
         self.episode_max_blind = 0
         self.pending_tarots = []
         
-        # Completely reinitialize the game and shop
-        self.start_new_game()
+        self.game_manager = GameManager()
+        
+        self.game_manager.start_new_game()
+        
+        if self.config.get('add_bootstrap', False):
+            from JokerCreation import create_joker
+            joker = create_joker("Bootstraps")
+            if joker:
+                self.game_manager.game.inventory.add_joker(joker)
+                print(f"Added Bootstraps to inventory")
+        
+        self.game_manager.game.inventory.money = 100
+        
+        self.update_shop()
         
         return self._get_play_state()
     
@@ -81,10 +93,10 @@ class BalatroEnv:
         
         if ante_number in self.all_shops and blind_type in self.all_shops[ante_number]:
             self.current_shop = self.all_shops[ante_number][blind_type]
-            print(f"Updated shop for Ante {current_ante} ({blind_type})")
+            print(f"Updated shop for Round {current_ante} ({blind_type})")
         else:
             self.current_shop = Shop()
-            print(f"Created default shop for Ante {current_ante}")
+            print(f"Created default shop for Round {current_ante}")
 
     def step_strategy(self, action):
         """Process a strategy action with improved shop handling"""
@@ -272,7 +284,7 @@ class BalatroEnv:
         shop_phase = self.game_manager.current_ante_beaten and not done
         
         if shop_phase:
-            print(f"\n***** ANTE {self.game_manager.game.current_ante} BEATEN! *****")
+            print(f"\n***** Round {self.game_manager.game.current_ante} BEATEN! *****")
             print(f"Score: {self.game_manager.current_score}/{self.game_manager.game.current_blind}")
             print(f"Moving to shop phase")
         
@@ -2017,6 +2029,7 @@ def evaluate_agent(play_agent, num_episodes=10, config=None):
     results['win_rate'] = (results['win_rate'] / num_episodes) * 100
     
     return results
+
 def train_with_game_phases():
     """
     Train agents with clear separation between gameplay and shop phases,
@@ -2415,25 +2428,38 @@ def test_rl_model():
     return env, play_agent, strategy_agent
 
 if __name__ == "__main__":
-    # Run test to check for shop transition bugs
-    test_rl_model()
-
-
-#if __name__ == "__main__":
-    # Train from scratch
-    #play_agent, strategy_agent = train_with_curriculum()
+    # Initialize the environment to get state and action sizes
+    env = BalatroEnv()
     
-    # play_agent = PlayingAgent(state_size=STATE_SIZE, action_size=ACTION_SIZE)
+    # Define state sizes for both agents
+    play_state_size = len(env._get_play_state())
+    strategy_state_size = len(env._get_strategy_state())
+    
+    # Define action sizes for both agents
+    play_action_size = env._define_play_action_space() 
+    strategy_action_size = env._define_strategy_action_space()
+    
+    print(f"Play agent: state_size={play_state_size}, action_size={play_action_size}")
+    print(f"Strategy agent: state_size={strategy_state_size}, action_size={strategy_action_size}")
+    
+    # Option 1: Run the test to check for shop transition bugs
+    # test_rl_model()
+    
+    # Option 2: Train from scratch with curriculum learning
+    play_agent, strategy_agent = train_with_curriculum()
+    
+    # Option 3: Load existing models and continue training
+    # play_agent = PlayingAgent(state_size=play_state_size, action_size=play_action_size)
     # play_agent.load_model("play_agent_latest.h5")
-    # strategy_agent = StrategyAgent(state_size=STATE_SIZE, action_size=ACTION_SIZE)
+    # strategy_agent = StrategyAgent(state_size=strategy_state_size, action_size=strategy_action_size)
     # strategy_agent.load_model("strategy_agent_latest.h5")
-    
     # play_agent, strategy_agent = train_agents(episodes=5000, 
     #                                          play_agent=play_agent,
     #                                          strategy_agent=strategy_agent)
     
-    #results = evaluate_agents(play_agent, strategy_agent)
-    ##print("Evaluation Results:")
-    #print(f"  Win Rate: {results['win_rate']:.2f}%")
-    #print(f"  Average Max Ante: {results['average_score']:.2f}")
-    #print(f"  Average Hands Played: {sum(results['hands_played'])/len(results['hands_played']):.2f}")
+    # Evaluate agents after training
+    results = evaluate_agents(play_agent, strategy_agent)
+    print("Evaluation Results:")
+    print(f"  Win Rate: {results['win_rate']:.2f}%")
+    print(f"  Average Max Ante: {results['average_score']:.2f}")
+    print(f"  Average Hands Played: {sum(results['hands_played'])/len(results['hands_played']):.2f}")
