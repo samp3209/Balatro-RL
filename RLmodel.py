@@ -89,7 +89,7 @@ class BalatroEnv:
             print(f"Created default shop for Ante {current_ante}")
 
     def step_strategy(self, action):
-        """Process a strategy action (shop purchase, tarot use, etc.)"""
+        """Process a strategy action with fixes for the infinite loop issue"""
         # Make sure we have the current shop
         if not hasattr(self, 'current_shop') or self.current_shop is None:
             self.update_shop()
@@ -98,12 +98,21 @@ class BalatroEnv:
         done = self.game_manager.game_over
         info = {"message": "Unknown action"}
         
-        # Debug info about available actions
-        if self.episode_step % 10 == 0:  # Only print occasionally
-            print(f"\n===== SHOP PHASE =====")
-            print(f"Money: ${self.game_manager.game.inventory.money}")
-            print(f"Available jokers: {[j.name for j in self.game_manager.game.inventory.jokers]}")
-            print(f"Available consumables: {len(self.game_manager.game.inventory.consumables)}")
+        # IMPORTANT: Check if we're stuck in a loop
+        if hasattr(self, 'last_ante') and self.last_ante == self.game_manager.game.current_ante and self.game_manager.current_ante_beaten:
+            print("Detected potential infinite loop - forcing ante advancement")
+            success = self.game_manager.next_ante()
+            if success:
+                print(f"Forcibly advanced to Ante {self.game_manager.game.current_ante}, Blind: {self.game_manager.game.current_blind}")
+                self.update_shop()
+                reward += 3.0  # Extra reward for breaking the loop
+            else:
+                print("Failed to advance ante, setting game to done")
+                done = True
+                self.game_manager.game_over = True
+        
+        # Store current ante to detect loops
+        self.last_ante = self.game_manager.game.current_ante
         
         # Handle different action types
         if action < 4:  # Buy shop item
@@ -171,11 +180,11 @@ class BalatroEnv:
         
         # After shop interaction, advance to next ante if needed
         if action == 15 or (self.game_manager.current_ante_beaten and not done):
-            current_ante = self.game_manager.game.current_ante
             success = self.game_manager.next_ante()
             
             if success:
                 # Update shop for the new ante
+                self.game_manager.current_ante_beaten = False
                 self.update_shop()
                 
                 # Use any pending tarots
@@ -196,48 +205,41 @@ class BalatroEnv:
                 # Additional reward for advancing to the next ante
                 reward += 2.0
                 print(f"Advanced to Ante {self.game_manager.game.current_ante}, Blind: {self.game_manager.game.current_blind}")
-        
+            
         next_state = self._get_strategy_state()
         return next_state, reward, done, info
+    
+
     def step_play(self, action):
-        """Process a playing action (select cards to play/discard)"""
+        """Process a playing action with stricter enforcement of rules"""
         self.episode_step += 1
         
-        # Track current game state for debugging
-        blind_type = "Small"
-        if self.game_manager.game.current_ante % 3 == 2:
-            blind_type = "Medium"
-        elif self.game_manager.game.current_ante % 3 == 0:
-            blind_type = "Boss"
-            
-        current_ante_number = ((self.game_manager.game.current_ante - 1) // 3) + 1
-        self.episode_max_blind = max(self.episode_max_blind, self.game_manager.game.current_ante)
+        is_discard = self.is_discard_action(action)
         
-        if self.episode_step % 10 == 0:  # Only print occasionally to reduce output
-            print(f"\n----- Step {self.episode_step}: Ante {current_ante_number}, {blind_type} Blind: {self.game_manager.game.current_blind} -----")
-            print(f"Hand {self.game_manager.hands_played + 1}/{self.game_manager.max_hands_per_round}, " + 
-                f"Discards Used: {self.game_manager.discards_used}/{self.game_manager.max_discards_per_round}, " + 
-                f"Score: {self.game_manager.current_score}/{self.game_manager.game.current_blind}")
+        if is_discard and self.game_manager.discards_used >= self.game_manager.max_discards_per_round:
+            print(f"WARNING: Attempted to discard but already used max discards: {self.game_manager.discards_used}/{self.game_manager.max_discards_per_round}")
+            is_discard = False
+            action = action % 256 
         
-        # Process a playing action (select cards to play/discard)
         card_indices = self._convert_action_to_card_indices(action)
         
-        # Set the flag based on the action type
-        self.last_action_was_discard = self.is_discard_action(action)
+        self.last_action_was_discard = is_discard
         
-        if self.last_action_was_discard:
+        if self.episode_step % 10 == 0:
+            action_type = "Discard" if is_discard else "Play"
+            print(f"Step {self.episode_step}: {action_type} action with indices {card_indices}")
+            print(f"  Hand size: {len(self.game_manager.current_hand)}, Score: {self.game_manager.current_score}/{self.game_manager.game.current_blind}")
+        
+        if is_discard:
             success, message = self.game_manager.discard_cards(card_indices)
         else:
             success, message = self.game_manager.play_cards(card_indices)
         
-        # Calculate reward based on outcome
         reward = self._calculate_play_reward()
         
-        # Check if blind is beaten or game is over
         done = self.game_manager.game_over
         shop_phase = self.game_manager.current_ante_beaten and not done
         
-        # If the ante is beaten, setup for the shop phase
         if shop_phase:
             print(f"\n***** ANTE {self.game_manager.game.current_ante} BEATEN! *****")
             print(f"Score: {self.game_manager.current_score}/{self.game_manager.game.current_blind}")
@@ -353,50 +355,51 @@ class BalatroEnv:
         return 26
 
     def _calculate_play_reward(self):
-        """Calculate reward for play actions"""
-        score_fraction = self.game_manager.current_score / self.game_manager.game.current_blind
+        """Calculate a more informative reward for the play agent"""
+        score_progress = self.game_manager.current_score / self.game_manager.game.current_blind
         
-        hand_reward = 0
+        hand_quality_reward = 0
         if self.game_manager.hand_result:
             hand_quality_map = {
-                HandType.HIGH_CARD: 0.01,
-                HandType.PAIR: 0.3,
-                HandType.TWO_PAIR: 0.8,
-                HandType.THREE_OF_A_KIND: 1.5,
-                HandType.STRAIGHT: 5,
-                HandType.FLUSH: 5,
-                HandType.FULL_HOUSE: 5.2,
-                HandType.FOUR_OF_A_KIND: 8.0,
-                HandType.STRAIGHT_FLUSH: 12.0
+                HandType.HIGH_CARD: 0.1,
+                HandType.PAIR: 0.5,
+                HandType.TWO_PAIR: 1.5,
+                HandType.THREE_OF_A_KIND: 3.0,
+                HandType.STRAIGHT: 7.0,
+                HandType.FLUSH: 7.0,
+                HandType.FULL_HOUSE: 10.0,
+                HandType.FOUR_OF_A_KIND: 15.0,
+                HandType.STRAIGHT_FLUSH: 20.0
             }
-            hand_reward = hand_quality_map.get(self.game_manager.hand_result, 0.1)
+            hand_quality_reward = hand_quality_map.get(self.game_manager.hand_result, 0.1)
         
-        discard_penalty = -0.05 * self.last_action_was_discard
+        # Add a bonus based on number of cards played
+        cards_played = len(self.game_manager.played_cards)
+        cards_bonus = 0
+        if cards_played >= 5:  # Strongly encourage playing 5+ cards (actual poker hands)
+            cards_bonus = 2.0
+        else:
+            cards_bonus = 0.1 * cards_played  # Small reward for playing any cards
         
-        wasted_hand_penalty = -0.1 if score_fraction < 0.1 else 0
+        # Penalize frequent discarding without playing hands
+        discard_penalty = -0.5 if self.last_action_was_discard else 0
         
-        ante_beaten_reward = 5.0 if self.game_manager.current_ante_beaten else 0
+        # Strong reward for beating an ante
+        ante_beaten_reward = 10.0 if self.game_manager.current_ante_beaten else 0
         
-        game_over_penalty = -3.0 if self.game_manager.game_over else 0
+        # Severe penalty for game over
+        game_over_penalty = -10.0 if self.game_manager.game_over else 0
         
-        cards_played_bonus = 0.05 * len(self.game_manager.played_cards) if not self.last_action_was_discard else 0
-        
-        progress_bonus = 0.1 * self.game_manager.game.current_ante
+        # Track rewards for debugging
+        total_reward = score_progress + hand_quality_reward + cards_bonus + discard_penalty + ante_beaten_reward + game_over_penalty
         
         if self.episode_step % 10 == 0:
-            reward_components = { 
-                "score_fraction": score_fraction,
-                "hand_reward": hand_reward,
-                "discard_penalty": discard_penalty,
-                "wasted_hand_penalty": wasted_hand_penalty,
-                "ante_beaten_reward": ante_beaten_reward,
-                "game_over_penalty": game_over_penalty,
-                "cards_played_bonus": cards_played_bonus,
-                "progress_bonus": progress_bonus
-            }
-            print(f"Reward components: {reward_components}")
+            print(f"Reward breakdown: score_progress={score_progress:.2f}, hand_quality={hand_quality_reward:.2f}, " +
+                f"cards_bonus={cards_bonus:.2f}, discard_penalty={discard_penalty:.2f}, " +
+                f"ante_beaten={ante_beaten_reward:.2f}, game_over={game_over_penalty:.2f}")
+            print(f"Hand: {self.game_manager.hand_result}, Cards played: {cards_played}, Total reward: {total_reward:.2f}")
         
-        return score_fraction + hand_reward + discard_penalty + wasted_hand_penalty + ante_beaten_reward + game_over_penalty + cards_played_bonus + progress_bonus
+        return total_reward
     
     def _calculate_strategy_reward(self):
         ante_progress = 0.2 * self.game_manager.game.current_ante
@@ -668,22 +671,74 @@ class BalatroEnv:
         return np.array(encoded)
 
     def get_valid_play_actions(self):
-        """Return valid play actions based on current game state"""
+        """Return valid play actions with guidance toward good poker hands"""
         valid_actions = []
         
         # If we can still play hands this round
         if self.game_manager.hands_played < self.game_manager.max_hands_per_round:
-            # Actions to play cards
+            # First, check if we have any good poker hands available
+            best_hand_info = self.game_manager.get_best_hand_from_current()
+            
+            if best_hand_info:
+                best_hand, best_cards = best_hand_info
+                
+                # Convert the best hand to an action
+                if best_hand.value >= HandType.PAIR.value:  # It's a decent hand
+                    recommended_indices = []
+                    for card in best_cards:
+                        for i, hand_card in enumerate(self.game_manager.current_hand):
+                            if hand_card.rank == card.rank and hand_card.suit == card.suit:
+                                recommended_indices.append(i)
+                                break
+                    
+                    # Convert indices to action number
+                    if recommended_indices:
+                        action = self._indices_to_action(recommended_indices, is_discard=False)
+                        valid_actions.append(action)
+                        
+                        # Add this as the first action, with higher probability of being chosen
+                        for _ in range(3):  # Add multiple times to increase probability
+                            valid_actions.append(action)
+            
+            # Add all possible play actions
             for i in range(min(256, 2**len(self.game_manager.current_hand))):
-                valid_actions.append(i)  # Play action
+                if self._is_valid_play_action(i):
+                    valid_actions.append(i)  # Play action
         
         # If we can still discard cards
         if self.game_manager.discards_used < self.game_manager.max_discards_per_round:
-            # Actions to discard cards
-            for i in range(min(256, 2**len(self.game_manager.current_hand))):
-                valid_actions.append(i + 256)  # Discard action
+            # Only add discard actions if we have a poor hand
+            best_hand_info = self.game_manager.get_best_hand_from_current()
+            if not best_hand_info or best_hand_info[0].value <= HandType.PAIR.value:
+                # Actions to discard cards
+                for i in range(min(256, 2**len(self.game_manager.current_hand))):
+                    if self._is_valid_discard_action(i):
+                        valid_actions.append(i + 256)  # Discard action
         
         return valid_actions
+
+    def _is_valid_play_action(self, action):
+        """Check if a play action is valid (has at least one card selected)"""
+        # Prevent empty plays
+        card_indices = self._convert_action_to_card_indices(action)
+        return len(card_indices) > 0
+
+    def _is_valid_discard_action(self, action):
+        """Check if a discard action is valid (has at least one card selected)"""
+        # Prevent empty discards
+        card_indices = self._convert_action_to_card_indices(action)
+        return len(card_indices) > 0
+
+    def _indices_to_action(self, indices, is_discard=False):
+        """Convert a list of card indices to an action number"""
+        action = 0
+        for idx in indices:
+            action |= (1 << idx)
+        
+        if is_discard:
+            action += 256
+            
+        return action
 
     def get_valid_strategy_actions(self):
         """Return valid strategy actions based on current game state"""
@@ -1293,35 +1348,122 @@ def get_valid_strategy_actions(self):
 
 
 def train_with_curriculum():
+    """Enhanced curriculum learning approach"""
+    # Create the base agents
+    env = BalatroEnv(config={'simplified': True})
+    play_state_size = len(env._get_play_state())
+    play_agent = PlayingAgent(state_size=play_state_size, 
+                             action_size=env._define_play_action_space())
+    
+    # Add demonstration examples to jumpstart learning
+    print("Adding demonstration examples...")
+    add_demonstration_examples(play_agent, num_examples=200)
+    
     # Phase 1: Train with simplified game (no boss blinds, fixed deck)
     print("Phase 1: Learning basic card play...")
-    play_agent, strategy_agent = train_agents(episodes=2000, game_config={'simplified': True})
+    play_agent, _ = train_agents(episodes=500, game_config={'simplified': True}, 
+                                play_agent=play_agent,
+                                log_interval=20)
     
-    if play_agent is None:
-        # Create a default agent if training failed
-        env = BalatroEnv(config={'simplified': True})
-        play_state = env._get_play_state()
-        play_state_size = len(play_state)
-        play_agent = PlayingAgent(state_size=play_state_size, 
-                                 action_size=env._define_play_action_space())
+    # Evaluate after Phase 1
+    results = evaluate_agent(play_agent, num_episodes=20, config={'simplified': True})
+    print(f"After Phase 1: average score: {results['avg_score']}, max ante: {results['max_ante']}")
+    
+    if results['max_ante'] < 2:
+        print("Phase 1 performance too low. Retraining with more demonstrations...")
+        add_demonstration_examples(play_agent, num_examples=300)
+        play_agent, _ = train_agents(episodes=500, game_config={'simplified': True}, 
+                                    play_agent=play_agent,
+                                    log_interval=20)
+    
+    # Create strategy agent
+    strategy_state_size = len(env._get_strategy_state())
+    strategy_agent = StrategyAgent(state_size=strategy_state_size,
+                                  action_size=env._define_strategy_action_space())
     
     # Phase 2: Include boss blinds and shop interaction
     print("Phase 2: Adding boss blinds and shop strategy...")
-    play_agent, strategy_agent = train_agents(episodes=3000, 
+    play_agent, strategy_agent = train_agents(episodes=1000, 
                                              game_config={'simplified': False},
-                                             play_agent=play_agent)
+                                             play_agent=play_agent,
+                                             strategy_agent=strategy_agent,
+                                             log_interval=20)
     
     # Phase 3: Full game with enhanced exploration
     print("Phase 3: Full game training...")
-    play_agent, strategy_agent = train_agents(episodes=5000,
+    play_agent, strategy_agent = train_agents(episodes=2000,
                                              game_config={'full_features': True},
                                              play_agent=play_agent,
-                                             strategy_agent=strategy_agent)
+                                             strategy_agent=strategy_agent,
+                                             log_interval=20)
     
     return play_agent, strategy_agent
 
 
-
+def add_demonstration_examples(play_agent, num_examples=100):
+    """Add expert demonstration examples to the agent's memory"""
+    env = BalatroEnv(config={'simplified': True})
+    
+    for i in range(num_examples):
+        state = env.reset()
+        done = False
+        
+        while not done:
+            # Get the best hand according to poker rules
+            best_hand_info = env.game_manager.get_best_hand_from_current()
+            
+            if best_hand_info:
+                # Convert the best hand to card indices
+                best_hand, best_cards = best_hand_info
+                indices = []
+                
+                for card in best_cards:
+                    for i, hand_card in enumerate(env.game_manager.current_hand):
+                        if hand_card.rank == card.rank and hand_card.suit == card.suit:
+                            indices.append(i)
+                            break
+                
+                # Convert indices to action number
+                action = 0
+                for idx in indices:
+                    action |= (1 << idx)
+                
+                # Execute the action and get next state, reward
+                next_state, reward, done, _ = env.step_play(action)
+                
+                # Add this as a demonstration example
+                play_agent.remember(state, action, reward, next_state, done)
+                
+                state = next_state
+            else:
+                # If no good hand, try discarding
+                if env.game_manager.discards_used < env.game_manager.max_discards_per_round:
+                    # Discard low cards
+                    indices = []
+                    low_cards = sorted([(i, card.rank.value) for i, card in enumerate(env.game_manager.current_hand)], 
+                                     key=lambda x: x[1])[:3]
+                    indices = [idx for idx, _ in low_cards]
+                    
+                    action = 0
+                    for idx in indices:
+                        action |= (1 << idx)
+                    
+                    # Make it a discard action
+                    action += 256
+                    
+                    next_state, reward, done, _ = env.step_play(action)
+                    play_agent.remember(state, action, reward, next_state, done)
+                    
+                    state = next_state
+                else:
+                    # If can't discard, just play all cards
+                    action = (1 << len(env.game_manager.current_hand)) - 1
+                    next_state, reward, done, _ = env.step_play(action)
+                    play_agent.remember(state, action, reward, next_state, done)
+                    
+                    state = next_state
+    
+    print(f"Added {len(play_agent.memory)} demonstration examples to memory")
 
 
 def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=500, play_agent=None, strategy_agent=None, log_interval=100):
@@ -1511,6 +1653,50 @@ def evaluate_agents(play_agent, strategy_agent, episodes=100):
     # Restore original epsilon values
     play_agent.epsilon = play_epsilon
     strategy_agent.epsilon = strategy_epsilon
+    
+    return results
+
+def evaluate_agent(play_agent, num_episodes=10, config=None):
+    """Evaluate an agent's performance"""
+    env = BalatroEnv(config=config)
+    
+    results = {
+        'avg_score': 0,
+        'max_ante': 0,
+        'win_rate': 0
+    }
+    
+    total_score = 0
+    max_ante_reached = 0
+    
+    for _ in range(num_episodes):
+        state = env.reset()
+        done = False
+        episode_score = 0
+        
+        while not done:
+            valid_actions = env.get_valid_play_actions()
+            action = play_agent.act(state, valid_actions=valid_actions)
+            next_state, reward, done, info = env.step_play(action)
+            
+            state = next_state
+            episode_score = env.game_manager.current_score
+            
+            # Handle shop phase if needed
+            if info.get('shop_phase', False) and not done:
+                # Just skip shop for evaluation
+                next_state, _, done, _ = env.step_strategy(15)  # Skip action
+                state = next_state
+        
+        total_score += episode_score
+        max_ante_reached = max(max_ante_reached, env.game_manager.game.current_ante)
+        
+        if env.game_manager.game.current_ante >= 8:
+            results['win_rate'] += 1
+    
+    results['avg_score'] = total_score / num_episodes
+    results['max_ante'] = max_ante_reached
+    results['win_rate'] = (results['win_rate'] / num_episodes) * 100
     
     return results
 

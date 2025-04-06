@@ -367,7 +367,11 @@ class GameManager:
         Returns True if successful
         """
         if not self.current_ante_beaten:
+            print("Cannot advance ante - current ante not beaten")
             return False
+        
+        current_ante = self.game_manager.current_ante
+        print(f"next_ante(): Moving from Ante {current_ante} to {current_ante + 1}")
         
         hands_left = self.max_hands_per_round - self.hands_played
         
@@ -376,10 +380,6 @@ class GameManager:
             blind_type = "Medium"
         elif self.game.current_ante % 3 == 0:
             blind_type = "Boss"
-            for joker in self.game.inventory.jokers:
-                if joker.name == "Rocket" and hasattr(joker, "boss_blind_defeated"):
-                    joker.boss_blind_defeated += 1
-                    print(f"Rocket joker: Boss blind defeated counter increased to {joker.boss_blind_defeated}")
         
         base_money = 0
         if blind_type == "Small":
@@ -395,7 +395,6 @@ class GameManager:
         print(f"Earned ${money_earned} for beating the blind with {hands_left} hands left to play")
         
         self.game.current_ante += 1
-        
         blind_progression = {
             # Ante 1
             1: 300,   
@@ -432,7 +431,8 @@ class GameManager:
         }
         
         self.game.current_blind = blind_progression.get(self.game.current_ante, 5000)
-        
+        self.current_score = 0
+        self.current_ante_beaten = False
         self.reset_for_new_round()
         
         return True
