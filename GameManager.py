@@ -370,7 +370,7 @@ class GameManager:
             print("Cannot advance ante - current ante not beaten")
             return False
         
-        current_ante = self.game_manager.current_ante
+        current_ante = self.game.current_ante
         print(f"next_ante(): Moving from Ante {current_ante} to {current_ante + 1}")
         
         hands_left = self.max_hands_per_round - self.hands_played

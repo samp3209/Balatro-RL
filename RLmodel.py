@@ -63,7 +63,6 @@ class BalatroEnv:
         """Update the shop for the current ante"""
         if not hasattr(self, 'all_shops') or self.all_shops is None:
             try:
-                from Shop import initialize_shops_for_game
                 self.all_shops = initialize_shops_for_game()
             except ImportError:
                 self.all_shops = {}
@@ -174,10 +173,7 @@ class BalatroEnv:
                     info['message'] = message
                     print(f"Used {tarot_name}: {message}")
         
-        elif action == 15:  # Skip (do nothing) - advance to next blind
-            print("Skipping shop phase...")
-            reward += 1.0  # Reward for progressing 
-            info['message'] = "Advancing to next blind"
+
         
         # After shop interaction, advance to next blind if needed
         if action == 15 or (self.game_manager.current_ante_beaten and not done):
@@ -185,12 +181,11 @@ class BalatroEnv:
             success = self.game_manager.next_ante()
             
             if success:
-                # Update shop for the new blind
-                print("Successfully advanced to next blind")
-                self.game_manager.current_ante_beaten = False
-                self.update_shop()
+                self.game_manager.current_ante_beaten = False  # Reset the beaten flag
+                self.update_shop()  # Update shop for the new round
+                reward += 2.0 
+                print(f"Advanced to Ante {self.game_manager.game.current_ante}, Blind: {self.game_manager.game.current_blind}")
                 
-                # Use any pending tarots
                 if self.pending_tarots and self.game_manager.current_hand:
                     print("\n=== Using Tarot Cards From Shop ===")
                     for tarot_name in self.pending_tarots:
@@ -260,6 +255,8 @@ class BalatroEnv:
         }
         
         return next_state, reward, done, info
+    
+    
     def _get_play_state(self):
         """Get the current state as a flat numpy array of floats with FIXED SIZE"""
         state_features = []
@@ -1473,7 +1470,8 @@ def add_demonstration_examples(play_agent, num_examples=100):
 def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=500, play_agent=None, strategy_agent=None, log_interval=100):
     if game_config is None:
         game_config = {}
-    
+
+
     # Print what configuration is being used
     print(f"Training with config: {game_config}")
     
@@ -1500,6 +1498,8 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
     strategy_rewards = []
     ante_progression = []
     
+
+
     for e in range(episodes):
         play_state = env.reset()
         play_total_reward = 0
@@ -1575,7 +1575,7 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
                 strategy_state = env._get_strategy_state()
                 valid_strategy_actions = env.get_valid_strategy_actions()
                 strategy_action = strategy_agent.act(strategy_state, valid_actions=valid_strategy_actions)
-                
+                #strategy_action = 15
                 next_strategy_state, strategy_reward, strategy_done, strategy_info = env.step_strategy(strategy_action)
                 
                 # Remember strategy experience
@@ -1588,7 +1588,7 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
                 # Reset play state after strategy phase
                 if not done:
                     play_state = env._get_play_state()
-                    
+
                 # Double-check we're not in beaten state after strategy phase
                 if env.game_manager.current_ante_beaten and not done:
                     print("Warning: Still in beaten state after strategy phase, forcing another shop action")
