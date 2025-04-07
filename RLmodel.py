@@ -106,6 +106,23 @@ class BalatroEnv:
         if self.current_shop is None:
             self.update_shop()
         
+
+        print(f"\n=== SHOP CONTENTS ===")
+        for i, item in enumerate(self.current_shop.items):
+            if item is not None:
+                item_name = "Unknown"
+                price = self.current_shop.get_item_price(i)
+                if hasattr(item, 'item_type'):
+                    if item.item_type == ShopItemType.JOKER and hasattr(item.item, 'name'):
+                        item_name = item.item.name
+                    elif item.item_type in [ShopItemType.TAROT, ShopItemType.PLANET] and hasattr(item.item, 'name'):
+                        item_name = item.item.name
+                    else:
+                        item_name = str(item.item)
+                print(f"{i}: {item_name} - ${price}")
+            else:
+                print(f"{i}: [Empty]")
+
         reward = 0
         done = self.game_manager.game_over
         info = {"message": "Unknown action"}
@@ -2096,157 +2113,6 @@ def add_demonstration_examples(play_agent, num_examples=300):
     print(f"Successfully added {examples_added} demonstration examples to memory")
     return examples_added
 
-def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=500, play_agent=None, strategy_agent=None, log_interval=100):
-    if game_config is None:
-        game_config = {}
-
-    # Print what configuration is being used
-    print(f"Training with config: {game_config}")
-    
-    env = BalatroEnv(config=game_config)
-    
-    # Get accurate state sizes for validation
-    initial_play_state = env._get_play_state()
-    play_state_size = len(initial_play_state)
-    
-    # Initialize play agent if not provided
-    if play_agent is None:
-        print(f"Creating new PlayingAgent with state_size={play_state_size}")
-        play_agent = PlayingAgent(state_size=play_state_size, 
-                                action_size=env._define_play_action_space())
-    elif play_agent.state_size != play_state_size:
-        print(f"Warning: Play agent state size mismatch. Expected {play_state_size}, got {play_agent.state_size}")
-        print("Creating new play agent with correct size.")
-        play_agent = PlayingAgent(state_size=play_state_size, 
-                                action_size=env._define_play_action_space())
-    
-    # Only initialize strategy agent if provided or needed
-    if strategy_agent is not None:
-        strategy_state = env._get_strategy_state()
-        strategy_state_size = len(strategy_state)
-        
-        if strategy_agent.state_size != strategy_state_size:
-            print(f"Warning: Strategy agent state size mismatch. Expected {strategy_state_size}, got {strategy_agent.state_size}")
-            print("Creating new strategy agent with correct size.")
-            strategy_agent = StrategyAgent(state_size=strategy_state_size, 
-                                         action_size=env._define_strategy_action_space())
-    
-    # Training stats
-    play_rewards = []
-    strategy_rewards = []
-    ante_progression = []
-    
-    for e in range(episodes):
-        play_state = env.reset()
-        play_total_reward = 0
-        strategy_total_reward = 0
-        
-        # Track game progress
-        max_ante_reached = 1
-        game_steps = 0
-        shop_steps = 0  # Track steps in shop phase separately
-        
-        done = False
-        in_shop_phase = False
-        
-        while not done and game_steps < 500:
-            if not in_shop_phase:
-                valid_play_actions = env.get_valid_play_actions()
-                play_action = play_agent.act(state, valid_actions=valid_play_actions)
-                next_play_state, play_reward, done, info = env.step_play(play_action)
-                
-                # Get normalized next state
-                next_state = env.get_normalized_state(is_shop_phase=False)
-                
-                # Remember play experience
-                play_agent.remember(state, play_action, play_reward, next_state, done)
-                state = next_state
-                play_total_reward += play_reward
-                
-                # Check if we need to enter shop phase
-                if info.get('shop_phase', False) and not done:
-                    in_shop_phase = True
-                    env.update_shop()
-                    # Important: Get the normalized state for shop phase
-                    state = env.get_normalized_state(is_shop_phase=True)
-            
-            # SHOP PHASE
-            elif strategy_agent is not None:
-                # Now we're in the strategy phase
-                valid_strategy_actions = env.get_valid_strategy_actions()
-                strategy_action = strategy_agent.act(state, valid_actions=valid_strategy_actions)
-                
-                # Execute the action
-                next_strategy_state, strategy_reward, strategy_done, strategy_info = env.step_strategy(strategy_action)
-                
-                # Get normalized next state
-                next_state = env.get_normalized_state(is_shop_phase=True)
-                
-                # Remember strategy experience
-                strategy_agent.remember(state, strategy_action, strategy_reward, 
-                                      next_state, strategy_done)
-                
-                strategy_total_reward += strategy_reward
-                done = strategy_done
-                
-                # Check if we need to exit shop phase
-                if strategy_action == 15 or not env.game_manager.current_ante_beaten or done:
-                    in_shop_phase = False
-                    
-                    # Important: Get normalized state for play phase
-                    if not done:
-                        state = env.get_normalized_state(is_shop_phase=False)
-                else:
-                    state = next_state
-        
-        # Training after episode completes
-        if len(play_agent.memory) > batch_size:
-            play_agent.replay(batch_size)
-        
-        if strategy_agent is not None and len(strategy_agent.memory) > batch_size:
-            strategy_agent.replay(batch_size)
-        
-        play_agent.decay_epsilon()
-        if strategy_agent is not None:
-            strategy_agent.decay_epsilon()
-        
-        play_rewards.append(play_total_reward)
-        if strategy_agent is not None:
-            strategy_rewards.append(strategy_total_reward)
-        ante_progression.append(max_ante_reached)
-        
-        if (e + 1) % log_interval == 0:
-            avg_play_reward = sum(play_rewards[-log_interval:]) / log_interval
-            avg_ante = sum(ante_progression[-log_interval:]) / log_interval
-            
-            print(f"\nEpisode {e+1}/{episodes}")
-            print(f"  Play Agent: reward={avg_play_reward:.2f}, epsilon={play_agent.epsilon:.3f}")
-            
-            if strategy_agent is not None:
-                avg_strategy_reward = sum(strategy_rewards[-log_interval:]) / log_interval
-                print(f"  Strategy Agent: reward={avg_strategy_reward:.2f}, epsilon={strategy_agent.epsilon:.3f}")
-            
-            print(f"  Average max ante: {avg_ante:.2f}")
-            
-            play_stats = play_agent.get_stats()
-            print(f"  Play stats: {play_stats}")
-        
-        if (e + 1) % save_interval == 0:
-            print(f"Saving models at episode {e+1}")
-            play_agent.save_model(f"play_agent_ep{e+1}.h5")
-            if strategy_agent is not None:
-                strategy_agent.save_model(f"strategy_agent_ep{e+1}.h5")
-            
-            play_agent.save_model("play_agent_latest.h5")
-            if strategy_agent is not None:
-                strategy_agent.save_model("strategy_agent_latest.h5")
-    
-    play_agent.save_model("play_agent_final.h5")
-    if strategy_agent is not None:
-        strategy_agent.save_model("strategy_agent_final.h5")
-    
-    return play_agent, strategy_agent
-
 def train_with_separate_agents():
     """Train with fully isolated state handling and force progression"""
     env = BalatroEnv(config={'simplified': True})
@@ -2299,11 +2165,125 @@ def train_with_separate_agents():
         play_total_reward = 0
         strategy_total_reward = 0
         
+        # Add this flag to mimic GameTest.py's flow
+        show_shop_next = False
+        pending_tarots = []
+        
         # Track shop phase to detect loops
         shop_steps = 0
-        max_shop_steps = 20  # Maximum number of shop actions before forcing skip
+        max_shop_steps = 20
         
         while not done:
+            # NEW: Check if we should enter shop phase
+            if show_shop_next:
+                # SHOP PHASE - similar to GameTest.py
+                print(f"\n===== SHOP PHASE (Episode {episode+1}) =====")
+                
+                # Make sure shop is updated for current ante
+                env.update_shop()
+                
+                # Debug print to verify shop contents
+                env.update_shop()
+
+                # Debug print to verify shop contents
+                print(f"Shop contents for Ante {env.game_manager.game.current_ante}:")
+                for i, item in enumerate(env.current_shop.items):
+                    if item is not None:
+                        item_name = "Unknown"
+                        price = env.current_shop.get_item_price(i)
+                        if hasattr(item, 'item_type'):
+                            if item.item_type == ShopItemType.JOKER and hasattr(item.item, 'name'):
+                                item_name = item.item.name
+                            elif item.item_type in [ShopItemType.TAROT, ShopItemType.PLANET] and hasattr(item.item, 'name'):
+                                item_name = item.item.name
+                            else:
+                                item_name = str(item.item)
+                        print(f"{i}: {item_name} - ${price}")
+                    else:
+                        print(f"{i}: [Empty]")
+
+                        # Add this to fix empty shop issue:
+                        if all(item is None for item in env.current_shop.items):
+                            print("WARNING: Shop is empty, forcing restock")
+                            
+                            # Direct initialization similar to GameTest.py
+                            current_ante = env.game_manager.game.current_ante
+                            ante_number = ((current_ante - 1) // 3) + 1
+                            
+                            blind_type_map = {
+                                0: "boss_blind",
+                                1: "small_blind", 
+                                2: "medium_blind"
+                            }
+                            
+                            blind_type = blind_type_map[current_ante % 3]
+                            
+                            if ante_number in env.all_shops and blind_type in env.all_shops[ante_number]:
+                                env.current_shop = env.all_shops[ante_number][blind_type]
+                                print(f"Forced shop update for Round {current_ante} ({blind_type})")
+                                
+                                # Print updated shop contents
+                                print("Updated shop contents:")
+                                for i, item in enumerate(env.current_shop.items):
+                                    if item is not None:
+                                        item_name = "Unknown"
+                                        if hasattr(item, 'item_type'):
+                                            if item.item_type == ShopItemType.JOKER and hasattr(item.item, 'name'):
+                                                item_name = item.item.name
+                                            elif item.item_type in [ShopItemType.TAROT, ShopItemType.PLANET] and hasattr(item.item, 'name'):
+                                                item_name = item.item.name
+                                            else:
+                                                item_name = str(item.item)
+                                        print(f"{i}: {item_name}")
+                                    else:
+                                        print(f"{i}: [Empty]")
+                # Stay in shop phase until explicitly exited
+                shop_loop_done = False
+                while not shop_loop_done and not done:
+                    # Get strategy action
+                    strategy_state = env._get_strategy_state()
+                    
+                    # Force correct shape
+                    if not isinstance(strategy_state, np.ndarray):
+                        strategy_state = np.array(strategy_state, dtype=np.float32)
+                    strategy_state = strategy_state.reshape(1, -1)
+                    
+                    valid_actions = env.get_valid_strategy_actions()
+                    
+                    # Force skip after too many shop steps
+                    shop_steps += 1
+                    force_skip = shop_steps >= max_shop_steps
+                    
+                    if force_skip:
+                        strategy_action = 15  # Skip action (advance to next ante)
+                        print(f"Forcing shop exit after {shop_steps} steps")
+                    else:
+                        strategy_action = strategy_act(strategy_state, valid_actions)
+                    
+                    # Execute the action
+                    next_strategy_state, strategy_reward, strategy_done, strategy_info = env.step_strategy(strategy_action)
+                    
+                    # Store experience
+                    strategy_memory.append((strategy_state[0], strategy_action, strategy_reward, next_strategy_state[0], strategy_done))
+                    strategy_total_reward += strategy_reward
+                    done = strategy_done
+                    
+                    # Exit shop if the skip action was used or game is over
+                    if strategy_action == 15 or done:
+                        shop_loop_done = True
+                        show_shop_next = False
+                        print(f"Exited shop. New ante: {env.game_manager.game.current_ante}")
+                        
+                        # Deal new hand after exiting shop if needed
+                        if not env.game_manager.current_hand and not done:
+                            env.game_manager.deal_new_hand()
+                
+                # Reset shop steps counter
+                shop_steps = 0
+                
+                # Continue to next iteration of main loop
+                continue
+            
             # PLAY PHASE
             # Always get a fresh play state
             play_state = env._get_play_state()
@@ -2321,66 +2301,12 @@ def train_with_separate_agents():
             play_memory.append((play_state[0], play_action, play_reward, next_play_state[0], done))
             play_total_reward += play_reward
             
-            # SHOP PHASE
+            # Check if ante is beaten to trigger shop phase
             if info.get('shop_phase', False) and not done:
-                env.update_shop()
-                shop_done = False
+                print(f"\n***** ANTE {env.game_manager.game.current_ante} BEATEN! Moving to shop phase *****")
+                show_shop_next = True
                 shop_steps = 0  # Reset shop step counter
-                
-                while not shop_done and not done:
-                    shop_steps += 1
-                    
-                    # Always get a fresh strategy state
-                    strategy_state = env._get_strategy_state()
-                    
-                    # Force correct shape
-                    if not isinstance(strategy_state, np.ndarray):
-                        strategy_state = np.array(strategy_state, dtype=np.float32)
-                    strategy_state = strategy_state.reshape(1, -1)
-                    
-                    valid_actions = env.get_valid_strategy_actions()
-                    
-                    # IMPORTANT: Force the "Skip" action in specific cases to prevent infinite loops
-                    force_skip = False
-                    
-                    # Case 1: Early episodes, encourage exploration of the game flow
-                    if episode < 10:
-                        force_skip = True
-                    
-                    # Case 2: Detect shop phase loops by limiting shop steps
-                    if shop_steps >= max_shop_steps:
-                        print(f"Forcing shop exit after {shop_steps} steps to prevent infinite loop")
-                        force_skip = True
-                    
-                    # Case 3: Random chance to skip (increasing with shop_steps)
-                    if shop_steps > 5 and random.random() < (shop_steps / 50):
-                        force_skip = True
-                    
-                    if force_skip:
-                        strategy_action = 15  # Skip action (advance to next ante)
-                    else:
-                        strategy_action = strategy_act(strategy_state, valid_actions)
-                    
-                    _, strategy_reward, done, info = env.step_strategy(strategy_action)
-                    
-                    # Get next strategy state
-                    next_strategy_state = env._get_strategy_state()
-                    if not isinstance(next_strategy_state, np.ndarray):
-                        next_strategy_state = np.array(next_strategy_state, dtype=np.float32)
-                    next_strategy_state = next_strategy_state.reshape(1, -1)
-                    
-                    # Store strategy experience (with higher reward for Skip in loop conditions)
-                    if force_skip and shop_steps >= max_shop_steps:
-                        # Provide extra reward for Skip action when it breaks a loop
-                        strategy_reward += 2.0
-                    
-                    strategy_memory.append((strategy_state[0], strategy_action, strategy_reward, next_strategy_state[0], done))
-                    strategy_total_reward += strategy_reward
-                    
-                    # Always exit shop phase after skip action
-                    if strategy_action == 15 or done:
-                        shop_done = True
-        
+            
         # Train play agent
         if len(play_memory) >= 32:
             # Sample batch
@@ -2412,12 +2338,31 @@ def train_with_separate_agents():
             # Sample batch
             minibatch = random.sample(strategy_memory, 16)
             
-            # Convert to arrays
+            # Convert to arrays with correct dimensions
             states = np.array([exp[0] for exp in minibatch])
             actions = np.array([exp[1] for exp in minibatch])
             rewards = np.array([exp[2] for exp in minibatch])
             next_states = np.array([exp[3] for exp in minibatch])
             dones = np.array([exp[4] for exp in minibatch])
+            
+            # Fix shape issues - make sure states and next_states have correct shape
+            if len(states.shape) == 1:
+                states = states.reshape(1, -1)
+            elif states.shape[1] != strategy_state_size:
+                # Pad or reshape to match expected dimensions
+                padded_states = np.zeros((len(states), strategy_state_size), dtype=np.float32)
+                for i, state in enumerate(states):
+                    padded_states[i, :min(len(state), strategy_state_size)] = state[:min(len(state), strategy_state_size)]
+                states = padded_states
+            
+            if len(next_states.shape) == 1:
+                next_states = next_states.reshape(1, -1)
+            elif next_states.shape[1] != strategy_state_size:
+                # Pad or reshape to match expected dimensions
+                padded_next_states = np.zeros((len(next_states), strategy_state_size), dtype=np.float32)
+                for i, state in enumerate(next_states):
+                    padded_next_states[i, :min(len(state), strategy_state_size)] = state[:min(len(state), strategy_state_size)]
+                next_states = padded_next_states
             
             # Get target values
             targets = strategy_agent.model.predict(states, verbose=0)
