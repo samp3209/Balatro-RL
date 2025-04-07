@@ -101,7 +101,7 @@ class BalatroEnv:
             print(f"Created default shop for Round {current_ante}")
 
     def step_strategy(self, action):
-        """Process a strategy action with improved reward signals"""
+        """Process a strategy action with improved reward signals and anti-loop measures"""
         # Make sure we have the current shop
         if self.current_shop is None:
             self.update_shop()
@@ -188,8 +188,9 @@ class BalatroEnv:
                     info['message'] = message
                     print(f"Used {tarot_name}: {message}")
         
-
-        if action == 15 and self.game_manager.current_ante_beaten:
+        # IMPORTANT: Advance to next ante (action 15) with proper reward
+        elif action == 15 and self.game_manager.current_ante_beaten:
+            # Add an incentive to move to the next ante
             joker_count = len(self.game_manager.game.inventory.jokers)
             reward = 10.0 + joker_count * 2.0  # Strong reward based on joker count
             
@@ -197,7 +198,22 @@ class BalatroEnv:
             money = self.game_manager.game.inventory.money
             reward += min(money / 20.0, 5.0)  # Up to 5.0 additional reward
             
-            info['message'] = f"Advanced to Ante {self.game_manager.game.current_ante}"
+            # Execute the next ante action
+            success = self.game_manager.next_ante()
+            
+            if success:
+                info['message'] = f"Advanced to Ante {self.game_manager.game.current_ante}"
+                print(f"Successfully advanced to Ante {self.game_manager.game.current_ante}")
+                
+                # Deal a new hand for the new ante
+                if not self.game_manager.current_hand:
+                    self.game_manager.deal_new_hand()
+            else:
+                reward = 0  # No reward if failed to advance
+                info['message'] = "Failed to advance to next ante"
+                print("Failed to advance to next ante")
+        
+        # Return updated game state
         next_state = self._get_strategy_state()
         return next_state, reward, done, info
 
@@ -417,7 +433,7 @@ class BalatroEnv:
         hand_quality_reward = 0
         if self.game_manager.hand_result:
             hand_map = {
-                HandType.HIGH_CARD: 0.2,
+                HandType.HIGH_CARD: -2.0,
                 HandType.PAIR: 1.0,
                 HandType.TWO_PAIR: 3.0,
                 HandType.THREE_OF_A_KIND: 6.0,
@@ -1296,25 +1312,23 @@ class StrategyAgent:
         self.recent_rewards = deque(maxlen=100)
         self.recent_actions = deque(maxlen=100)
         
+        # Action mapping for debugging
         self.action_map = {
             0: "Buy Shop Item 0",
             1: "Buy Shop Item 1",
             2: "Buy Shop Item 2",
             3: "Buy Shop Item 3",
-            
             4: "Sell Joker 0",
             5: "Sell Joker 1",
             6: "Sell Joker 2",
             7: "Sell Joker 3",
             8: "Sell Joker 4",
-            
             9: "Use Tarot 0 with no cards",
             10: "Use Tarot 0 with lowest cards",
             11: "Use Tarot 0 with highest cards",
             12: "Use Tarot 1 with no cards",
             13: "Use Tarot 1 with lowest cards",
             14: "Use Tarot 1 with highest cards",
-            
             15: "Skip (Do Nothing)"
         }
         
@@ -1344,10 +1358,10 @@ class StrategyAgent:
     def update_target_model(self):
         """Copy weights from model to target_model"""
         self.target_model.set_weights(self.model.get_weights())
-    
+
     def remember(self, state, action, reward, next_state, done):
-        """Store experience in replay memory with size adaptation"""
-        # Convert to numpy arrays
+        """Store experience in replay memory with robust state size handling"""
+        # Convert to numpy arrays if needed
         if not isinstance(state, np.ndarray):
             state = np.array(state, dtype=np.float32)
         if not isinstance(next_state, np.ndarray):
@@ -1359,17 +1373,17 @@ class StrategyAgent:
         if len(next_state.shape) > 1:
             next_state = next_state.flatten()
         
-        # Handle size mismatch by padding states before storing
-        expected_size = 77  # Hardcoded expected size
-        
-        if len(state) != expected_size:
-            padded_state = np.zeros(expected_size, dtype=np.float32)
-            padded_state[:len(state)] = state
+        # Handle size mismatch by padding or truncating
+        if len(state) != self.state_size:
+            padded_state = np.zeros(self.state_size, dtype=np.float32)
+            min_size = min(len(state), self.state_size)
+            padded_state[:min_size] = state[:min_size]
             state = padded_state
             
-        if len(next_state) != expected_size:
-            padded_next_state = np.zeros(expected_size, dtype=np.float32)
-            padded_next_state[:len(next_state)] = next_state
+        if len(next_state) != self.state_size:
+            padded_next_state = np.zeros(self.state_size, dtype=np.float32)
+            min_size = min(len(next_state), self.state_size)
+            padded_next_state[:min_size] = next_state[:min_size]
             next_state = padded_next_state
         
         # Store the padded states in memory
@@ -1379,24 +1393,24 @@ class StrategyAgent:
         self.recent_rewards.append(reward)
     
     def act(self, state, valid_actions=None):
-        """Choose an action with input adaptation"""
+        """Choose an action with robust state size handling"""
         if not isinstance(state, np.ndarray):
             state = np.array(state, dtype=np.float32)
             
         if len(state.shape) == 1:
             state = state.reshape(1, -1)
         
-        # Handle mismatch - pad the input to match expected size
-        input_size = state.shape[1]
-        expected_size = 77  # Hardcoded expected size that your model wants
-        
-        if input_size != expected_size:
-            # Pad with zeros to match expected size
-            padded_state = np.zeros((1, expected_size), dtype=np.float32)
-            padded_state[0, :input_size] = state[0, :input_size]
+        if state.shape[1] != self.state_size:
+            print(f"WARNING: Strategy agent handling state size mismatch: got {state.shape[1]}, expected {self.state_size}")
+            
+            padded_state = np.zeros((1, self.state_size), dtype=np.float32)
+            
+            min_size = min(state.shape[1], self.state_size)
+            padded_state[0, :min_size] = state[0, :min_size]
+            
             state = padded_state
         
-        # Rest of the method remains the same
+        # Exploration-exploitation logic
         if np.random.rand() <= self.epsilon:
             if valid_actions is not None:
                 return random.choice(valid_actions)
@@ -2234,7 +2248,7 @@ def train_agents(episodes=10000, batch_size=64, game_config=None, save_interval=
     return play_agent, strategy_agent
 
 def train_with_separate_agents():
-    """Train with fully isolated state handling"""
+    """Train with fully isolated state handling and force progression"""
     env = BalatroEnv(config={'simplified': True})
     
     # Create agents with correct dimensions
@@ -2285,6 +2299,10 @@ def train_with_separate_agents():
         play_total_reward = 0
         strategy_total_reward = 0
         
+        # Track shop phase to detect loops
+        shop_steps = 0
+        max_shop_steps = 20  # Maximum number of shop actions before forcing skip
+        
         while not done:
             # PLAY PHASE
             # Always get a fresh play state
@@ -2307,11 +2325,13 @@ def train_with_separate_agents():
             if info.get('shop_phase', False) and not done:
                 env.update_shop()
                 shop_done = False
+                shop_steps = 0  # Reset shop step counter
                 
                 while not shop_done and not done:
+                    shop_steps += 1
+                    
                     # Always get a fresh strategy state
                     strategy_state = env._get_strategy_state()
-                    print(f"Strategy state shape: {strategy_state.shape if isinstance(strategy_state, np.ndarray) else len(strategy_state)}")
                     
                     # Force correct shape
                     if not isinstance(strategy_state, np.ndarray):
@@ -2320,9 +2340,24 @@ def train_with_separate_agents():
                     
                     valid_actions = env.get_valid_strategy_actions()
                     
-                    # Force skip action every 5 steps to avoid getting stuck
-                    if episode < 10 or (episode % 5 == 0 and strategy_total_reward > 0):
-                        strategy_action = 15  # Skip action
+                    # IMPORTANT: Force the "Skip" action in specific cases to prevent infinite loops
+                    force_skip = False
+                    
+                    # Case 1: Early episodes, encourage exploration of the game flow
+                    if episode < 10:
+                        force_skip = True
+                    
+                    # Case 2: Detect shop phase loops by limiting shop steps
+                    if shop_steps >= max_shop_steps:
+                        print(f"Forcing shop exit after {shop_steps} steps to prevent infinite loop")
+                        force_skip = True
+                    
+                    # Case 3: Random chance to skip (increasing with shop_steps)
+                    if shop_steps > 5 and random.random() < (shop_steps / 50):
+                        force_skip = True
+                    
+                    if force_skip:
+                        strategy_action = 15  # Skip action (advance to next ante)
                     else:
                         strategy_action = strategy_act(strategy_state, valid_actions)
                     
@@ -2334,7 +2369,11 @@ def train_with_separate_agents():
                         next_strategy_state = np.array(next_strategy_state, dtype=np.float32)
                     next_strategy_state = next_strategy_state.reshape(1, -1)
                     
-                    # Store strategy experience
+                    # Store strategy experience (with higher reward for Skip in loop conditions)
+                    if force_skip and shop_steps >= max_shop_steps:
+                        # Provide extra reward for Skip action when it breaks a loop
+                        strategy_reward += 2.0
+                    
                     strategy_memory.append((strategy_state[0], strategy_action, strategy_reward, next_strategy_state[0], done))
                     strategy_total_reward += strategy_reward
                     
