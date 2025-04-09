@@ -75,7 +75,7 @@ class BalatroEnv:
                 self.game_manager.game.inventory.add_joker(joker)
                 print(f"Added Bootstraps to inventory")
         
-        self.game_manager.game.inventory.money = 100
+        self.game_manager.game.inventory.money = 10
         
         self.all_shops = initialize_shops_for_game()
         self.current_shop = None
@@ -182,7 +182,6 @@ class BalatroEnv:
         done = self.game_manager.game_over
         info = {"message": "Unknown action"}
         
-        # Shopping actions (slots 0-3)
         if action < 4:
             slot = action
             if self.current_shop and slot < len(self.current_shop.items) and self.current_shop.items[slot] is not None:
@@ -192,12 +191,10 @@ class BalatroEnv:
                 if self.game_manager.game.inventory.money >= price:
                     item_name = "Unknown Item"
                     
-                    # Get proper item name and type for better rewards
                     if hasattr(item, 'item_type'):
                         if item.item_type == ShopItemType.JOKER:
                             item_name = item.item.name if hasattr(item.item, 'name') else "Joker"
-                            # MASSIVELY INCREASED REWARD for jokers - from 5.0 to 25.0
-                            base_reward = 25.0
+                            base_reward = 15.0
                             
                             # Bonus for specific powerful jokers
                             powerful_jokers = ["Mr. Bones", "Green Joker", "Bootstraps", "Socks and Buskin", "The Duo", "8 Ball"]
@@ -218,9 +215,9 @@ class BalatroEnv:
                             # Bonus for specific useful planets
                             if hasattr(item.item, 'name'):
                                 if item.item.name in ["Mars", "Neptune"]:
-                                    base_reward += 4.0
-                                elif item.item.name in ["Venus", "Earth", "Saturn"]:
                                     base_reward += 3.0
+                                elif item.item.name in ["Venus", "Earth", "Saturn"]:
+                                    base_reward += 6.0
                                     
                             reward = base_reward
                             
@@ -281,7 +278,7 @@ class BalatroEnv:
                     
                     # Special case: more jokers than we can use (5+)
                     if len(self.game_manager.game.inventory.jokers) > 4:
-                        reward += 1.0  # Good to make space
+                        reward += 0.5  # Good to make space
                         
                         # If we have a lot of jokers, calculate the relative value
                         all_values = [j.sell_value for j in self.game_manager.game.inventory.jokers if hasattr(j, 'sell_value')]
@@ -341,7 +338,7 @@ class BalatroEnv:
         # IMPORTANT: Advance to next ante (action 15) with proper reward
         elif action == 15 and self.game_manager.current_ante_beaten:
             # Significantly increased reward for advancing to next ante
-            base_reward = 15.0  
+            base_reward = 10.0  
             
             # Scale reward by the current ante (higher antes = higher rewards)
             ante_bonus = self.game_manager.game.current_ante * 2.0
@@ -410,7 +407,7 @@ class BalatroEnv:
                 # Game over
                 self.game_manager.game_over = True
                 next_state = self._get_play_state()
-                return next_state, -5.0, True, {"message": "GAME OVER: Failed to beat the ante"}
+                return next_state, -65.0, True, {"message": "GAME OVER: Failed to beat the ante"}
         
         is_discard = self.is_discard_action(action)
         
@@ -1870,92 +1867,6 @@ class StrategyAgent:
         return history.history['loss'][0]
 
 
-def get_valid_strategy_actions(self):
-    """Return valid strategy actions based on current game state"""
-    valid_actions = []
-    
-    # Create shop if it doesn't exist yet
-    if self.current_shop is None:
-        self.update_shop()
-    
-    # Check which shop items we can afford
-    for i in range(4):  # 4 shop slots
-        if (i < len(self.current_shop.items) and 
-            self.current_shop.items[i] is not None and 
-            self.game_manager.game.inventory.money >= self.current_shop.get_item_price(i)):
-            valid_actions.append(i)  # Buy shop item
-    
-    # Check if we can sell jokers
-    joker_count = len(self.game_manager.game.inventory.jokers)
-    if joker_count > 0:
-        for i in range(min(joker_count, 5)):
-            valid_actions.append(i + 4)  # Sell joker
-    
-    # Check if we can use tarot cards
-    tarot_indices = self.game_manager.game.inventory.get_consumable_tarot_indices()
-    for i, tarot_idx in enumerate(tarot_indices):
-        if i < 2:  # Limit to first 2 tarots for simplicity
-            valid_actions.append(9 + i*3)  # Use tarot with no cards
-            valid_actions.append(10 + i*3)  # Use tarot with lowest cards
-            valid_actions.append(11 + i*3)  # Use tarot with highest cards
-    
-    # Always valid to advance to next ante
-    valid_actions.append(15)  # Skip action (next ante)
-    
-    # If no valid actions, can always skip
-    if not valid_actions:
-        valid_actions.append(15)
-    
-    return valid_actions
-
-def handle_shop_strategy(self, env):
-    """
-    Automated shop strategy based on GameTest.py logic
-    This can be used to provide demonstration examples
-    """
-    inventory = env.game_manager.game.inventory
-    valid_actions = []
-    
-    joker_count = len(inventory.jokers)
-    
-    # Buy affordable jokers if we have space
-    if joker_count < 5:
-        for i in range(4):
-            if (i < len(self.current_shop.items) and 
-                self.current_shop.items[i] is not None and 
-                self.current_shop.items[i].item_type == ShopItemType.JOKER and
-                inventory.money >= self.current_shop.get_item_price(i)):
-                valid_actions.append(i)
-    
-    # Buy planets (auto-use)
-    for i in range(4):
-        if (i < len(self.current_shop.items) and 
-            self.current_shop.items[i] is not None and 
-            self.current_shop.items[i].item_type == ShopItemType.PLANET and
-            inventory.money >= self.current_shop.get_item_price(i)):
-            valid_actions.append(i)
-    
-    # Buy tarot cards
-    for i in range(4):
-        if (i < len(self.current_shop.items) and 
-            self.current_shop.items[i] is not None and 
-            self.current_shop.items[i].item_type == ShopItemType.TAROT and
-            inventory.money >= self.current_shop.get_item_price(i)):
-            valid_actions.append(i)
-    
-    # Sell a joker if we have too many
-    if joker_count > 4 and random.random() < 0.5:
-        # Find lowest value joker
-        min_value_idx = min(range(joker_count), key=lambda i: inventory.jokers[i].sell_value)
-        valid_actions.append(min_value_idx + 4)
-    
-    # If no valid actions or we've already bought what we want
-    if not valid_actions:
-        return 15  # Skip to next ante
-    
-    # Choose an action
-    return random.choice(valid_actions)
-
 def use_pending_tarots(self):
     """
     Use tarot cards that were purchased from the shop, similar to GameTest.py
@@ -2004,127 +1915,6 @@ def use_pending_tarots(self):
     
     return used_any
 
-def handle_pack_opening(self, pack_type, item_index):
-    """
-    Handle opening a booster pack and selecting items from it, similar to GameTest.py
-    
-    Args:
-        pack_type: The type of pack (Standard, Celestial, Arcana, etc.)
-        item_index: The index of the item in the shop
-    """
-    from JokerCreation import create_joker
-    from Tarot import create_tarot_by_name
-    from Planet import create_planet_by_name
-    from Card import Card
-    from Enums import Suit, Rank, CardEnhancement
-    
-    if self.current_shop.items[item_index] is None:
-        print("Error: No item at this index")
-        return False
-    
-    shop_item = self.current_shop.items[item_index]
-    pack_contents = None
-    
-    # Get pack contents if available
-    if hasattr(shop_item, 'contents'):
-        pack_contents = shop_item.contents
-    else:
-        # Try to get contents from predefined packs
-        if "STANDARD" in pack_type.upper():
-            # Example standard pack contents - should be replaced with actual logic
-            pack_contents = ["A ♥", "K ♠", "Q ♦", "J ♣", "10 ♥"]
-    
-    if not pack_contents:
-        print(f"Error: No contents found for {pack_type}")
-        return False
-    
-    print(f"\n=== Opening {pack_type} ===")
-    print("Pack contents:")
-    for i, item in enumerate(pack_contents):
-        print(f"{i}: {item}")
-    
-    # Process based on pack type
-    if "STANDARD" in pack_type.upper():
-        # Simple AI: randomly select a card from the pack
-        selected_idx = random.randint(0, len(pack_contents) - 1)
-        card_string = pack_contents[selected_idx]
-        
-        # Process the card (similar to GameTest.py but simplified)
-        parts = card_string.split()
-        
-        # Map strings to proper Rank enums
-        rank_map = {
-            "A": Rank.ACE, 
-            "2": Rank.TWO,
-            "3": Rank.THREE,
-            "4": Rank.FOUR,
-            "5": Rank.FIVE,
-            "6": Rank.SIX,
-            "7": Rank.SEVEN,
-            "8": Rank.EIGHT,
-            "9": Rank.NINE,
-            "10": Rank.TEN,
-            "J": Rank.JACK, 
-            "Q": Rank.QUEEN, 
-            "K": Rank.KING
-        }
-        
-        # Map strings to proper Suit enums
-        suit_map = {
-            "heart": Suit.HEARTS, 
-            "hearts": Suit.HEARTS, 
-            "♥": Suit.HEARTS,
-            "diamond": Suit.DIAMONDS, 
-            "diamonds": Suit.DIAMONDS, 
-            "♦": Suit.DIAMONDS,
-            "club": Suit.CLUBS, 
-            "clubs": Suit.CLUBS, 
-            "♣": Suit.CLUBS,
-            "spade": Suit.SPADES, 
-            "spades": Suit.SPADES, 
-            "♠": Suit.SPADES
-        }
-        
-        # Extract rank and suit
-        rank_str = parts[0] if parts else "A"
-        suit_str = parts[-1].lower() if len(parts) > 1 else "hearts"
-        
-        rank = rank_map.get(rank_str, Rank.ACE)
-        suit = suit_map.get(suit_str, Suit.HEARTS)
-        
-        # Create and add card
-        try:
-            card = Card(suit, rank)
-            self.game_manager.game.inventory.add_card_to_deck(card)
-            print(f"Added {card_string} to deck")
-            return True
-        except Exception as e:
-            print(f"Error processing card: {e}")
-            return False
-            
-    elif "CELESTIAL" in pack_type.upper():
-        # Handle celestial packs (planets)
-        selected_idx = random.randint(0, len(pack_contents) - 1)
-        planet_name = pack_contents[selected_idx]
-        
-        try:
-            planet = create_planet_by_name(planet_name)
-            if planet and hasattr(planet, 'planet_type'):
-                planet_type = planet.planet_type
-                current_level = self.game_manager.game.inventory.planet_levels.get(planet_type, 1)
-                self.game_manager.game.inventory.planet_levels[planet_type] = current_level + 1
-                
-                print(f"Used {planet_name} planet to upgrade to level {current_level + 1}")
-                return True
-            else:
-                print(f"Failed to process planet {planet_name}")
-                return False
-        except Exception as e:
-            print(f"Error processing planet: {e}")
-            return False
-    
-    # Handle other pack types if needed
-    return False
 def get_shop_for_current_ante(game_manager, all_shops):
     """Get the appropriate shop for the current ante and blind"""
     current_ante = game_manager.game.current_ante
@@ -2304,138 +2094,6 @@ def train_with_curriculum():
     
     return play_agent, strategy_agent
 
-def demonstrate_shop_purchases(env, demo_episodes=100):
-    """
-    Generate demonstrations of good shop purchasing behavior to bootstrap learning
-    Returns a list of (state, action, reward, next_state, done) tuples
-    """
-    print(f"Generating {demo_episodes} shop purchase demonstrations...")
-    demonstrations = []
-    
-    for episode in range(demo_episodes):
-        env.reset()
-        
-        # Add initial money for purchasing
-        env.game_manager.game.inventory.money = random.randint(8, 15)
-        
-        # Make sure shop is updated
-        env.update_shop()
-        
-        # Analyze shop contents and make smart purchases
-        joker_purchased = False
-        planet_purchased = False
-        tarot_purchased = False
-        
-        # First, look for valuable jokers
-        for i in range(4):
-            if i >= len(env.current_shop.items) or env.current_shop.items[i] is None:
-                continue
-                
-            item = env.current_shop.items[i]
-            if (hasattr(item, 'item_type') and 
-                item.item_type == ShopItemType.JOKER and
-                env.game_manager.game.inventory.money >= env.current_shop.get_item_price(i)):
-                
-                # Check if it's a high-value joker
-                joker_name = "Unknown"
-                if hasattr(item.item, 'name'):
-                    joker_name = item.item.name
-                
-                high_value_jokers = ["Mr. Bones", "Green Joker", "Bootstraps", "Socks and Buskin", 
-                                   "The Duo", "8 Ball", "Rocket", "Banner"]
-                
-                # Record this purchase demonstration
-                state = env._get_strategy_state()
-                action = i  # Shop slot to purchase
-                
-                # Execute purchase
-                next_state, reward, done, _ = env.step_strategy(action)
-                
-                # Artificial reward for demonstrations - higher for valuable jokers
-                demo_reward = 10.0
-                if joker_name in high_value_jokers:
-                    demo_reward = 15.0
-                
-                # Store the demonstration with enhanced reward
-                demonstrations.append((state, action, demo_reward, next_state, done))
-                
-                joker_purchased = True
-                break  # Only buy one joker per demonstration
-        
-        # Next, look for planets if we didn't buy a joker
-        if not joker_purchased:
-            for i in range(4):
-                if i >= len(env.current_shop.items) or env.current_shop.items[i] is None:
-                    continue
-                    
-                item = env.current_shop.items[i]
-                if (hasattr(item, 'item_type') and 
-                    item.item_type == ShopItemType.PLANET and
-                    env.game_manager.game.inventory.money >= env.current_shop.get_item_price(i)):
-                    
-                    planet_name = "Unknown"
-                    if hasattr(item.item, 'name'):
-                        planet_name = item.item.name
-                    
-                    # Record this purchase demonstration
-                    state = env._get_strategy_state()
-                    action = i  # Shop slot to purchase
-                    
-                    # Execute purchase
-                    next_state, reward, done, _ = env.step_strategy(action)
-                    
-                    # Artificial reward for planet purchase
-                    demo_reward = 8.0
-                    if planet_name in ["Mars", "Neptune", "Venus"]:
-                        demo_reward = 12.0
-                    
-                    # Store the demonstration
-                    demonstrations.append((state, action, demo_reward, next_state, done))
-                    
-                    planet_purchased = True
-                    break
-        
-        # Finally, look for tarots if we didn't buy anything else
-        if not joker_purchased and not planet_purchased:
-            for i in range(4):
-                if i >= len(env.current_shop.items) or env.current_shop.items[i] is None:
-                    continue
-                    
-                item = env.current_shop.items[i]
-                if (hasattr(item, 'item_type') and 
-                    item.item_type == ShopItemType.TAROT and
-                    env.game_manager.game.inventory.money >= env.current_shop.get_item_price(i)):
-                    
-                    # Record this purchase demonstration
-                    state = env._get_strategy_state()
-                    action = i  # Shop slot to purchase
-                    
-                    # Execute purchase
-                    next_state, reward, done, _ = env.step_strategy(action)
-                    
-                    # Artificial reward
-                    demo_reward = 6.0
-                    
-                    # Store the demonstration
-                    demonstrations.append((state, action, demo_reward, next_state, done))
-                    
-                    tarot_purchased = True
-                    break
-        
-        # Always demonstrate advancing to next ante
-        if env.game_manager.current_ante_beaten:
-            state = env._get_strategy_state()
-            action = 15  # Advance to next ante
-            next_state, reward, done, _ = env.step_strategy(action)
-            
-            # Artificial reward for advancing
-            demo_reward = 15.0
-            
-            # Store the demonstration
-            demonstrations.append((state, action, demo_reward, next_state, done))
-    
-    print(f"Generated {len(demonstrations)} shop purchase demonstrations")
-    return demonstrations
 
 def create_shop_for_ante(ante_number, blind_type):
     """Create a new shop with appropriate items for the specified ante and blind type"""
@@ -2615,23 +2273,6 @@ def create_shop_for_ante(ante_number, blind_type):
     
     return shop
 
-def initialize_strategy_agent_with_demonstrations(strategy_agent, env, num_demos=200):
-    """Initialize the strategy agent with demonstrations before training"""
-    # Generate demonstrations
-    demos = demonstrate_shop_purchases(env, demo_episodes=num_demos)
-    
-    # Add demonstrations to agent memory
-    for demo in demos:
-        strategy_agent.remember(*demo)
-    
-    # Pre-train the agent with these demonstrations
-    if len(strategy_agent.memory) >= 32:
-        for _ in range(20):  # 20 training iterations on demonstrations
-            strategy_agent.prioritized_strategy_replay(32)
-    
-    print(f"Pre-trained strategy agent with {len(demos)} demonstrations")
-    return strategy_agent
-
 
 def add_demonstration_examples(play_agent, num_examples=300):
     """Add expert demonstration examples to the agent's memory with better poker hand recognition"""
@@ -2729,66 +2370,7 @@ def add_demonstration_examples(play_agent, num_examples=300):
     print(f"Successfully added {examples_added} demonstration examples to memory")
     return examples_added
 
-def generate_joker_purchase_demonstrations(env, num_demos=100):
-    """Generate demonstrations specifically focused on purchasing jokers"""
-    print(f"Generating {num_demos} joker purchase demonstrations...")
-    joker_demonstrations = []
-    
-    for _ in range(num_demos):
-        env.reset()
-        
-        # Give plenty of money for purchases
-        env.game_manager.game.inventory.money = random.randint(15, 25)
-        
-        # Update shop
-        env.update_shop()
-        
-        # Look specifically for jokers
-        for i in range(4):
-            if i >= len(env.current_shop.items) or env.current_shop.items[i] is None:
-                continue
-                
-            item = env.current_shop.items[i]
-            if (hasattr(item, 'item_type') and 
-                item.item_type == ShopItemType.JOKER and
-                env.game_manager.game.inventory.money >= env.current_shop.get_item_price(i)):
-                
-                # Record this state
-                state = env._get_strategy_state()
-                action = i  # Shop slot to purchase joker
-                
-                # Execute purchase
-                next_state, _, done, _ = env.step_strategy(action)
-                
-                # Artificially high reward for joker purchase demonstration
-                demo_reward = 25.0
-                
-                # Store demonstration
-                joker_demonstrations.append((state, action, demo_reward, next_state, done))
-    
-    print(f"Generated {len(joker_demonstrations)} joker purchase demonstrations")
-    return joker_demonstrations
 
-def initialize_with_joker_demonstrations(strategy_agent, env):
-    """Pre-train the strategy agent with an emphasis on joker purchases"""
-    # First, get general strategy demonstrations
-    general_demos = demonstrate_shop_purchases(env, demo_episodes=100)
-    
-    # Then, get joker-focused demonstrations
-    joker_demos = generate_joker_purchase_demonstrations(env, num_demos=150)
-    
-    # Add all demos to memory
-    for demo in general_demos + joker_demos:
-        strategy_agent.remember(*demo)
-    
-    # Pre-train the agent
-    if len(strategy_agent.memory) >= 32:
-        print("Pre-training strategy agent...")
-        for _ in range(30):  # More training iterations
-            strategy_agent.prioritized_strategy_replay(32)
-    
-    print(f"Strategy agent pre-trained with {len(general_demos)} general demos and {len(joker_demos)} joker demos")
-    return strategy_agent
 
 def train_with_separate_agents():
     """
@@ -2811,8 +2393,7 @@ def train_with_separate_agents():
     play_agent = PlayingAgent(state_size=play_state_size, action_size=play_action_size)
     strategy_agent = StrategyAgent(state_size=strategy_state_size, action_size=strategy_action_size)
     
-    # Initialize strategy agent with joker-focused demonstrations
-    strategy_agent = initialize_with_joker_demonstrations(strategy_agent, env)
+ 
     
     # Add basic play demonstrations for play_agent
     add_demonstration_examples(play_agent, num_examples=200)
@@ -3003,71 +2584,7 @@ def train_with_separate_agents():
     
     return play_agent, strategy_agent
 
-def play_replay(agent, batch_size):
-    """Custom replay for play agent to avoid shape mismatch issues"""
-    if len(agent.memory) < batch_size:
-        return
-    
-    minibatch = random.sample(agent.memory, batch_size)
-    
-    # Extract experience components
-    states = np.array([exp[0] for exp in minibatch])
-    actions = np.array([exp[1] for exp in minibatch])
-    rewards = np.array([exp[2] for exp in minibatch])
-    next_states = np.array([exp[3] for exp in minibatch])
-    dones = np.array([exp[4] for exp in minibatch])
-    
-    # Validate shapes
-    if states.shape[1] != agent.state_size:
-        print(f"WARNING: Play state shape mismatch: expected {agent.state_size}, got {states.shape[1]}")
-        return
-    
-    # Get predictions
-    targets = agent.model.predict(states, verbose=0)
-    next_q_values = agent.target_model.predict(next_states, verbose=0)
-    
-    # Update targets for actions taken
-    for i in range(batch_size):
-        if dones[i]:
-            targets[i, actions[i]] = rewards[i]
-        else:
-            targets[i, actions[i]] = rewards[i] + agent.gamma * np.max(next_q_values[i])
-    
-    # Train the model
-    agent.model.fit(states, targets, epochs=1, verbose=0)
 
-def strategy_replay(agent, batch_size):
-    """Custom replay for strategy agent to avoid shape mismatch issues"""
-    if len(agent.memory) < batch_size:
-        return
-    
-    minibatch = random.sample(agent.memory, batch_size)
-    
-    # Extract experience components
-    states = np.array([exp[0] for exp in minibatch])
-    actions = np.array([exp[1] for exp in minibatch])
-    rewards = np.array([exp[2] for exp in minibatch])
-    next_states = np.array([exp[3] for exp in minibatch])
-    dones = np.array([exp[4] for exp in minibatch])
-    
-    # Validate shapes
-    if states.shape[1] != agent.state_size:
-        print(f"WARNING: Strategy state shape mismatch: expected {agent.state_size}, got {states.shape[1]}")
-        return
-    
-    # Get predictions
-    targets = agent.model.predict(states, verbose=0)
-    next_q_values = agent.target_model.predict(next_states, verbose=0)
-    
-    # Update targets for actions taken
-    for i in range(batch_size):
-        if dones[i]:
-            targets[i, actions[i]] = rewards[i]
-        else:
-            targets[i, actions[i]] = rewards[i] + agent.gamma * np.max(next_q_values[i])
-    
-    # Train the model
-    agent.model.fit(states, targets, epochs=1, verbose=0)
 
 def evaluate_with_purchase_tracking(play_agent, strategy_agent, episodes=20):
     """Evaluate agents with tracking of shop purchase behavior"""
@@ -3293,446 +2810,7 @@ def evaluate_agents(play_agent, strategy_agent, episodes=100):
     
     return results
 
-def evaluate_agent(play_agent, num_episodes=10, config=None):
-    """Evaluate an agent's performance"""
-    env = BalatroEnv(config=config)
-    
-    results = {
-        'avg_score': 0,
-        'max_ante': 0,
-        'win_rate': 0
-    }
-    
-    total_score = 0
-    max_ante_reached = 0
-    
-    for _ in range(num_episodes):
-        state = env.reset()
-        done = False
-        episode_score = 0
-        
-        while not done:
-            valid_actions = env.get_valid_play_actions()
-            action = play_agent.act(state, valid_actions=valid_actions)
-            next_state, reward, done, info = env.step_play(action)
-            
-            state = next_state
-            episode_score = env.game_manager.current_score
-            
-            # Handle shop phase if needed
-            if info.get('shop_phase', False) and not done:
-                # Just skip shop for evaluation
-                next_state, _, done, _ = env.step_strategy(15)  # Skip action
-                state = next_state
-        
-        total_score += episode_score
-        max_ante_reached = max(max_ante_reached, env.game_manager.game.current_ante)
-        
-        if env.game_manager.game.current_ante >= 8:
-            results['win_rate'] += 1
-    
-    results['avg_score'] = total_score / num_episodes
-    results['max_ante'] = max_ante_reached
-    results['win_rate'] = (results['win_rate'] / num_episodes) * 100
-    
-    return results
 
-def train_with_game_phases():
-    """
-    Train agents with clear separation between gameplay and shop phases,
-    similar to the structure in GameTest.py
-    """
-    env = BalatroEnv()
-    
-    # Initialize agents
-    play_state_size = len(env._get_play_state())
-    play_agent = PlayingAgent(state_size=play_state_size, action_size=env._define_play_action_space())
-    
-    strategy_state_size = len(env._get_strategy_state())
-    strategy_agent = StrategyAgent(state_size=strategy_state_size, action_size=env._define_strategy_action_space())
-    
-    # Training parameters
-    episodes = 5000
-    batch_size = 64
-    log_interval = 50
-    save_interval = 500
-    
-    # Training stats
-    play_rewards = []
-    strategy_rewards = []
-    max_antes = []
-    games_won = 0
-    
-    for e in range(episodes):
-        state = env.reset()
-        total_reward = 0
-        max_ante = 1
-        game_steps = 0
-        
-        play_episode_memory = []  # Store experiences for batch update
-        strategy_episode_memory = []  # Store experiences for batch update
-        
-        done = False
-        show_shop_next = False  # Flag for shop phase, similar to GameTest.py
-        pending_tarots = []
-        
-        # Game loop - structure similar to GameTest.py
-        while not done and game_steps < 500:  # Reduced safety limit to avoid infinite loops
-            game_steps += 1
-            
-            # Check for failure state - max hands played without beating ante
-            if (env.game_manager.hands_played >= env.game_manager.max_hands_per_round and 
-                env.game_manager.current_score < env.game_manager.game.current_blind and 
-                not env.game_manager.current_ante_beaten and
-                not show_shop_next):
-                print(f"\nEpisode {e+1}: Failed to beat ante {env.game_manager.game.current_ante}")
-                print(f"Score: {env.game_manager.current_score}/{env.game_manager.game.current_blind}")
-                
-                # Set game over
-                env.game_manager.game_over = True
-                done = True
-                
-                # Strong negative reward for failing
-                total_reward -= 50.0
-                
-                # Store transition
-                play_episode_memory.append((state, 0, -50.0, state, True))
-                
-                continue  # Skip to next episode
-            
-            # SHOP PHASE
-            if show_shop_next:
-                print(f"\n===== SHOP PHASE (Episode {e+1}) =====")
-                
-                # Make sure shop is updated for current ante
-                env.update_shop()
-                
-                # Get strategy action
-                strategy_state = env._get_strategy_state()
-                valid_actions = env.get_valid_strategy_actions()
-                
-                if not valid_actions:
-                    # Always include skip action
-                    valid_actions = [15]  # Skip to next ante
-                
-                strategy_action = strategy_agent.act(strategy_state, valid_actions)
-                
-                # Execute shop action
-                next_strategy_state, strategy_reward, strategy_done, strategy_info = env.step_strategy(strategy_action)
-                
-                # Store experience
-                strategy_episode_memory.append((strategy_state, strategy_action, strategy_reward, next_strategy_state, strategy_done))
-                
-                total_reward += strategy_reward
-                done = strategy_done
-                
-                # Check if we're done with shop (used "Skip" action)
-                if strategy_action == 15:
-                    show_shop_next = False
-                    print(f"Advanced to Ante {env.game_manager.game.current_ante}")
-                    
-                    # Deal a new hand if needed
-                    if not env.game_manager.current_hand:
-                        env.game_manager.deal_new_hand()
-                
-                # Handle any pending tarots
-                if pending_tarots and env.game_manager.current_hand:
-                    print(f"Using {len(pending_tarots)} pending tarots")
-                    for tarot_name in list(pending_tarots):  # Use a copy of the list for iteration
-                        # Find the tarot in inventory
-                        tarot_indices = env.game_manager.game.inventory.get_consumable_tarot_indices()
-                        for idx in tarot_indices:
-                            consumable = env.game_manager.game.inventory.consumables[idx]
-                            if hasattr(consumable.item, 'name') and consumable.item.name == tarot_name:
-                                # Simple strategy: use tarot with no selected cards
-                                success, message = env.game_manager.use_tarot(idx, [])
-                                if success:
-                                    print(f"Used pending tarot {tarot_name}: {message}")
-                                    pending_tarots.remove(tarot_name)
-                    
-                # Force shop exit after 20 steps to avoid getting stuck
-                if game_steps % 20 == 0 and show_shop_next:
-                    print(f"Forcing shop exit at step {game_steps}")
-                    show_shop_next = False
-                    
-                    # Skip action to advance ante
-                    _, _, strategy_done, _ = env.step_strategy(15)
-                    done = strategy_done
-                    
-                    if not done:
-                        # Ensure we have a hand
-                        if not env.game_manager.current_hand:
-                            env.game_manager.deal_new_hand()
-                
-                # Update state for next iteration
-                if not done:
-                    state = env._get_play_state()
-                
-                continue  # Skip to next iteration
-            
-            # REGULAR GAMEPLAY PHASE
-            # Get valid actions
-            valid_actions = env.get_valid_play_actions()
-            
-            if not valid_actions:
-                print(f"Episode {e+1}: No valid actions at step {game_steps}")
-                # If no valid actions and max hands reached without beating ante
-                if (env.game_manager.hands_played >= env.game_manager.max_hands_per_round and 
-                    env.game_manager.current_score < env.game_manager.game.current_blind):
-                    print("Game over due to max hands without beating ante")
-                    env.game_manager.game_over = True
-                    done = True
-                    play_episode_memory.append((state, 0, -5.0, state, True))
-                    continue
-                
-                # Default to play all cards if we can
-                if len(env.game_manager.current_hand) > 0:
-                    print("Defaulting to play all cards")
-                    action = (1 << len(env.game_manager.current_hand)) - 1
-                else:
-                    # If no cards to play, must be in a bad state - end episode
-                    print("No cards in hand - ending episode")
-                    done = True
-                    continue
-            else:
-                # Choose action from valid actions
-                action = play_agent.act(state, valid_actions)
-            
-            # Take action
-            next_state, reward, done, info = env.step_play(action)
-            
-            # Store experience
-            play_episode_memory.append((state, action, reward, next_state, done))
-            
-            state = next_state
-            total_reward += reward
-            
-            # Track maximum ante reached
-            max_ante = max(max_ante, env.game_manager.game.current_ante)
-            
-            # Check if we need to enter shop phase (ante beaten)
-            if info.get('shop_phase', False) and not done:
-                print(f"\n===== ANTE {env.game_manager.game.current_ante} BEATEN! =====")
-                print(f"Current Score: {env.game_manager.current_score}/{env.game_manager.game.current_blind}")
-                show_shop_next = True
-        
-        # Learn from experiences collected in this episode
-        # Update play agent
-        for experience in play_episode_memory:
-            play_agent.remember(*experience)
-        
-        if len(play_agent.memory) >= batch_size:
-            play_agent.replay(batch_size)
-        
-        # Update strategy agent
-        for experience in strategy_episode_memory:
-            strategy_agent.remember(*experience)
-            
-        if len(strategy_agent.memory) >= batch_size:
-            strategy_agent.replay(batch_size)
-        
-        # Decay exploration rates
-        play_agent.decay_epsilon()
-        strategy_agent.decay_epsilon()
-        
-        # Log progress
-        play_rewards.append(total_reward)
-        max_antes.append(max_ante)
-        
-        if (e + 1) % log_interval == 0:
-            avg_reward = sum(play_rewards[-log_interval:]) / log_interval
-            avg_ante = sum(max_antes[-log_interval:]) / log_interval
-            
-            print(f"\nEpisode {e+1}/{episodes}")
-            print(f"  Average Reward: {avg_reward:.2f}")
-            print(f"  Average Max Ante: {avg_ante:.2f}")
-            print(f"  Play Agent Epsilon: {play_agent.epsilon:.3f}")
-            print(f"  Strategy Agent Epsilon: {strategy_agent.epsilon:.3f}")
-        
-        if (e + 1) % save_interval == 0:
-            play_agent.save_model(f"play_agent_ep{e+1}.h5")
-            strategy_agent.save_model(f"strategy_agent_ep{e+1}.h5")
-            
-            print(f"Models saved at episode {e+1}")
-    
-    return play_agent, strategy_agent
-
-
-
-def test_rl_model():
-    """
-    Run a test of the RL model using the fixed environment to check
-    if the shop transition works correctly
-    """
-    env = BalatroEnv()
-    
-    # Initialize agents
-    play_state_size = len(env._get_play_state())
-    play_agent = PlayingAgent(state_size=play_state_size, action_size=env._define_play_action_space())
-    
-    strategy_state_size = len(env._get_strategy_state())
-    strategy_agent = StrategyAgent(state_size=strategy_state_size, action_size=env._define_strategy_action_space())
-    
-    # Load pre-trained models if they exist
-    try:
-        play_agent.load_model("play_agent_latest.h5")
-        print("Loaded pre-trained play agent model")
-    except:
-        print("No pre-trained play agent model found, using new model")
-    
-    try:
-        strategy_agent.load_model("strategy_agent_latest.h5")
-        print("Loaded pre-trained strategy agent model")
-    except:
-        print("No pre-trained strategy agent model found, using new model")
-    
-    # Test parameters
-    episodes = 5
-    
-    for e in range(episodes):
-        state = env.reset()
-        total_reward = 0
-        steps = 0
-        max_ante = 1
-        
-        # Add initial jokers for testing
-        from JokerCreation import create_joker
-        for joker_name in ["Bootstraps", "Socks and Buskin"]:
-            joker = create_joker(joker_name)
-            if joker:
-                env.game_manager.game.inventory.add_joker(joker)
-                print(f"Added {joker_name} to inventory")
-        
-        # Give some initial money
-        env.game_manager.game.inventory.money = 100
-        
-        done = False
-        in_shop_phase = False
-        
-        print(f"\n===== STARTING TEST EPISODE {e+1} =====")
-        print(f"Current Ante: {env.game_manager.game.current_ante}, Blind: {env.game_manager.game.current_blind}")
-        print(f"Money: ${env.game_manager.game.inventory.money}")
-        
-        while not done and steps < 200:
-            steps += 1
-            
-            # Check if we're in shop phase based on ante beaten status
-            if env.game_manager.current_ante_beaten and not in_shop_phase and not done:
-                print(f"\n***** ANTE {env.game_manager.game.current_ante} BEATEN! Moving to shop *****")
-                in_shop_phase = True
-            
-            # SHOP PHASE
-            if in_shop_phase:
-                print(f"\n===== SHOP PHASE (Step {steps}) =====")
-                
-                # Update shop for current ante
-                env.update_shop()
-                
-                # Display shop items
-                print("\n=== SHOP ITEMS ===")
-                for i in range(len(env.current_shop.items)):
-                    if env.current_shop.items[i] is not None:
-                        item = env.current_shop.items[i]
-                        item_name = "Unknown Item"
-                        
-                        if hasattr(item, 'item_type'):
-                            if item.item_type == ShopItemType.JOKER and hasattr(item.item, 'name'):
-                                item_name = item.item.name
-                            elif item.item_type in [ShopItemType.TAROT, ShopItemType.PLANET] and hasattr(item.item, 'name'):
-                                item_name = item.item.name
-                            elif item.item_type == ShopItemType.BOOSTER and hasattr(item, 'item'):
-                                item_name = str(item.item)
-                                
-                        price = env.current_shop.get_item_price(i)
-                        print(f"{i}: {item_name} - ${price}")
-                
-                # Get strategy action
-                strategy_state = env._get_strategy_state()
-                valid_actions = env.get_valid_strategy_actions()
-                strategy_action = strategy_agent.act(strategy_state, valid_actions)
-                
-                # Take action
-                next_strategy_state, strategy_reward, strategy_done, strategy_info = env.step_strategy(strategy_action)
-                
-                # Display result
-                action_name = "Unknown"
-                if strategy_action < 4:
-                    action_name = f"Buy Item {strategy_action}"
-                elif strategy_action < 9:
-                    action_name = f"Sell Joker {strategy_action - 4}"
-                elif strategy_action < 15:
-                    tarot_idx = (strategy_action - 9) // 3
-                    selection_type = (strategy_action - 9) % 3
-                    action_name = f"Use Tarot {tarot_idx} with Selection {selection_type}"
-                elif strategy_action == 15:
-                    action_name = "Advance to Next Ante"
-                
-                print(f"Strategy Action: {action_name}")
-                print(f"Strategy Reward: {strategy_reward}")
-                print(f"Info: {strategy_info.get('message', 'No message')}")
-                
-                total_reward += strategy_reward
-                done = strategy_done
-                
-                # Exit shop phase if advancing to next ante or game is done
-                if strategy_action == 15 or done:
-                    in_shop_phase = False
-                    print(f"Exiting shop phase, advancing to Ante {env.game_manager.game.current_ante}")
-                    
-                    # Make sure we have a hand
-                    if not env.game_manager.current_hand:
-                        env.game_manager.deal_new_hand()
-            
-            # REGULAR GAMEPLAY PHASE
-            else:
-                # Print current hand info
-                print(f"\n=== PLAY PHASE (Step {steps}) ===")
-                print(f"Hand {env.game_manager.hands_played + 1}/{env.game_manager.max_hands_per_round}")
-                print(f"Discards Used: {env.game_manager.discards_used}/{env.game_manager.max_discards_per_round}")
-                print(f"Score: {env.game_manager.current_score}/{env.game_manager.game.current_blind}")
-                
-                # Print current hand
-                print("\n=== CURRENT HAND ===")
-                for i, card in enumerate(env.game_manager.current_hand):
-                    status = ""
-                    if card.scored:
-                        status += " (scoring)"
-                    if hasattr(card, 'debuffed') and card.debuffed:
-                        status += " (DEBUFFED)"
-                    print(f"{i}: {card}{status}")
-                
-                # Get valid actions
-                valid_actions = env.get_valid_play_actions()
-                
-                # Choose action
-                play_action = play_agent.act(state, valid_actions)
-                
-                # Decode action
-                is_discard = env.is_discard_action(play_action)
-                indices = env._convert_action_to_card_indices(play_action)
-                
-                action_type = "Discard" if is_discard else "Play"
-                print(f"\nChosen Action: {action_type} cards at indices {indices}")
-                
-                # Take action
-                next_state, reward, done, info = env.step_play(play_action)
-                
-                print(f"Reward: {reward}")
-                print(f"Info: {info.get('message', 'No message')}")
-                
-                state = next_state
-                total_reward += reward
-                
-                # Track maximum ante
-                max_ante = max(max_ante, env.game_manager.game.current_ante)
-        
-        print(f"\n===== TEST EPISODE {e+1} COMPLETE =====")
-        print(f"Total Steps: {steps}")
-        print(f"Max Ante Reached: {max_ante}")
-        print(f"Total Reward: {total_reward}")
-        print(f"Game Over: {done}")
-    
-    return env, play_agent, strategy_agent
 
 if __name__ == "__main__":
     # Train agents with improved shop behavior
