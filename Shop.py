@@ -525,28 +525,24 @@ class FixedShop(Shop):
     """Extension of the Shop class that uses predefined items from AnteShops"""
     
     def __init__(self, ante_number: int, shop_type: str):
-        self.ante_shops = AnteShops()
-        self.ante_number = ante_number
-        self.shop_type = shop_type
-        self.items = [None, None, None, None]  # Initialize items list
+        self.items = [None, None, None, None]
         self.discount = 0
         self.has_voucher = False
         
-        # Initialize with fixed items right away instead of calling parent constructor
+        # Then set up shop-specific attributes
+        self.ante_shops = AnteShops()
+        self.ante_number = ante_number
+        self.shop_type = shop_type
+        
+        # Fill the shop with appropriate items
         self._initialize_fixed_shop()
         
-        print(f"Created FixedShop for Ante {ante_number}, {shop_type}")
-        for i, item in enumerate(self.items):
-            if item is not None:
-                name = "Unknown"
-                if hasattr(item, 'item_type'):
-                    if item.item_type == ShopItemType.JOKER and hasattr(item.item, 'name'):
-                        name = item.item.name
-                    elif item.item_type in [ShopItemType.TAROT, ShopItemType.PLANET] and hasattr(item.item, 'name'):
-                        name = item.item.name
-                    else:
-                        name = str(item.item)
-                print(f"  {i}: {name} - ${item.price if hasattr(item, 'price') else '?'}")
+        #print(f"Created FixedShop for Ante {ante_number}, {shop_type}")
+        #for i, item in enumerate(self.items):
+        #    if item is not None:
+        #        name = item.get_name() if hasattr(item, 'get_name') else str(item)
+        #        price = item.price if hasattr(item, 'price') else '?'
+                #print(f"  {i}: {name} - ${price}")
     
     def _initialize_fixed_shop(self):
         """Initialize shop with predefined items from AnteShops"""

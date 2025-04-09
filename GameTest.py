@@ -351,19 +351,27 @@ def get_pack_contents(pack_type):
 def get_shop_for_current_ante(game_manager, all_shops):
     """Get the appropriate shop for the current ante and blind"""
     current_ante = game_manager.game.current_ante
+    
+    # Calculate ante number (1-8) based on game progression
     ante_number = ((current_ante - 1) // 3) + 1
     
+    # Determine blind type
+    blind_index = (current_ante - 1) % 3  # This gives 0, 1, or 2
     blind_type_map = {
-        0: "boss_blind",
-        1: "small_blind", 
-        2: "medium_blind"
+        0: "small_blind",
+        1: "medium_blind", 
+        2: "boss_blind"
     }
     
-    blind_type = blind_type_map[current_ante % 3]
+    blind_type = blind_type_map[blind_index]
+    
+    print(f"Getting shop for Ante {ante_number}, {blind_type} (current ante: {current_ante})")
     
     if ante_number in all_shops and blind_type in all_shops[ante_number]:
         return all_shops[ante_number][blind_type]
     
+    # Fallback to creating a new shop
+    print(f"WARNING: Shop not found for Ante {ante_number}, {blind_type}. Creating new shop.")
     return Shop()
 
 def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):

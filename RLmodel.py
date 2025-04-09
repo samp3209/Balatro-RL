@@ -31,8 +31,6 @@ class BalatroEnv:
         self.game_manager = GameManager()
         self.last_action_was_discard = False
         
-        self.all_shops = initialize_shops_for_game()
-        self.current_shop = None
         self.pending_tarots = []
         
         self.episode_step = 0
@@ -40,6 +38,9 @@ class BalatroEnv:
         
         # Initialize the game and shop
         self.start_new_game()
+        self.all_shops = initialize_shops_for_game()
+        self.current_shop = None
+
 
     def start_new_game(self):
         """Initialize game and shop consistently, similar to GameTest.py"""
@@ -76,52 +77,88 @@ class BalatroEnv:
         
         self.game_manager.game.inventory.money = 100
         
+        self.all_shops = initialize_shops_for_game()
+        self.current_shop = None
         self.update_shop()
         
         return self._get_play_state()
     
     def update_shop(self):
-        """Update the shop for the current ante with better logging"""
+        """Update the shop for the current ante with improved reliability"""
         current_ante = self.game_manager.game.current_ante
+        
+        # Check if we've beaten the game (ante > 24)
+        if current_ante > 24:
+            print("Game completed! No more shops available.")
+            # Create an empty shop or use a victory shop
+            self.current_shop = Shop()
+            return
+        
+        # Calculate ante number (1-8) and blind type
         ante_number = ((current_ante - 1) // 3) + 1
         
+        blind_index = (current_ante - 1) % 3
         blind_type_map = {
-            0: "boss_blind",
-            1: "small_blind", 
-            2: "medium_blind"
+            0: "small_blind",
+            1: "medium_blind", 
+            2: "boss_blind"
         }
         
-        blind_type = blind_type_map[current_ante % 3]
+        blind_type = blind_type_map[blind_index]
         
         print(f"Looking for shop for Ante {ante_number} ({blind_type})")
         
-        if ante_number in self.all_shops and blind_type in self.all_shops[ante_number]:
-            self.current_shop = self.all_shops[ante_number][blind_type]
-            print(f"Updated shop for Round {current_ante} ({blind_type})")
-            
-            # Debug info about shop contents
-            print("Shop contents:")
-            for i, item in enumerate(self.current_shop.items):
-                if item is not None:
-                    item_name = "Unknown"
-                    price = self.current_shop.get_item_price(i)
-                    if hasattr(item, 'item_type'):
-                        if item.item_type == ShopItemType.JOKER and hasattr(item.item, 'name'):
-                            item_name = item.item.name
-                        elif item.item_type in [ShopItemType.TAROT, ShopItemType.PLANET] and hasattr(item.item, 'name'):
-                            item_name = item.item.name
-                        else:
-                            item_name = str(item.item)
-                    print(f"  {i}: {item_name} - ${price}")
-                else:
-                    print(f"  {i}: [Empty]")
-        else:
-            print(f"WARNING: Shop not found for Ante {ante_number} ({blind_type}), creating empty shop")
+        # Skip boss_blind for Ante 8 - it doesn't exist
+        if ante_number == 8 and blind_type == "boss_blind":
+            print("No boss_blind exists for Ante 8, creating victory shop")
+            # Create a special "victory" shop
             self.current_shop = Shop()
+            self.current_shop.items = [None, None, None, None]  # Empty shop for victory
+            return
+        
+        # Ensure all_shops is initialized
+        if not hasattr(self, 'all_shops') or self.all_shops is None:
+            self.all_shops = initialize_shops_for_game()
+        
+        # Get the shop from all_shops, with proper error handling
+        shop = None
+        if ante_number in self.all_shops:
+            if blind_type in self.all_shops[ante_number]:
+                shop = self.all_shops[ante_number][blind_type]
+        
+        # If shop is None or empty, create a new one
+        if shop is None:
+            print(f"Shop not found for Ante {ante_number}, {blind_type}, creating new shop")
+            shop = create_shop_for_ante(ante_number, blind_type)
+        
+        self.current_shop = shop
+        
+        # Display shop contents for debugging
+        print(f"Updated shop for Round {current_ante} ({blind_type})")
+        print("Shop contents:")
+        for i, item in enumerate(self.current_shop.items):
+            if item is not None:
+                item_name = "Unknown"
+                if hasattr(item, 'item_type'):
+                    if item.item_type == ShopItemType.JOKER and hasattr(item.item, 'name'):
+                        item_name = item.item.name
+                    elif item.item_type in [ShopItemType.TAROT, ShopItemType.PLANET] and hasattr(item.item, 'name'):
+                        item_name = item.item.name
+                    else:
+                        item_name = str(item.item)
+                price = self.current_shop.get_item_price(i)
+                print(f"  {i}: {item_name} - ${price}")
+            else:
+                print(f"  {i}: [Empty]")
 
     def step_strategy(self, action):
         """Process a strategy action with improved reward signals and anti-loop measures"""
         # Make sure we have the current shop
+        if self.game_manager.game.current_ante > 24:
+            print("Game already completed! Starting new game.")
+            self.reset()
+            return self._get_strategy_state(), 0, False, {"message": "Game completed, starting new game"}
+    
         if self.current_shop is None:
             self.update_shop()
         
@@ -556,8 +593,8 @@ class BalatroEnv:
         if self.game_manager.hand_result:
             hand_map = {
                 HandType.HIGH_CARD: -2.0,
-                HandType.PAIR: 1.0,
-                HandType.TWO_PAIR: 3.0,
+                HandType.PAIR: -1.0,
+                HandType.TWO_PAIR: 2.0,
                 HandType.THREE_OF_A_KIND: 6.0,
                 HandType.STRAIGHT: 10.0,
                 HandType.FLUSH: 10.0,
@@ -2088,7 +2125,52 @@ def handle_pack_opening(self, pack_type, item_index):
     
     # Handle other pack types if needed
     return False
-
+def get_shop_for_current_ante(game_manager, all_shops):
+    """Get the appropriate shop for the current ante and blind"""
+    current_ante = game_manager.game.current_ante
+    
+    # Calculate ante number (1-8) and blind type correctly
+    ante_number = ((current_ante - 1) // 3) + 1
+    
+    blind_index = (current_ante - 1) % 3
+    blind_type_map = {
+        0: "small_blind",
+        1: "medium_blind", 
+        2: "boss_blind"
+    }
+    
+    blind_type = blind_type_map[blind_index]
+    
+    print(f"DEBUG: Getting shop for ante_number={ante_number}, blind_type={blind_type} (current_ante={current_ante})")
+    
+    # First, check if all_shops has the correct structure
+    if not all_shops:
+        print("WARNING: all_shops is empty or None, reinitializing shops")
+        all_shops = initialize_shops_for_game()
+    
+    # Check if the appropriate shop exists
+    if ante_number in all_shops:
+        if blind_type in all_shops[ante_number]:
+            shop = all_shops[ante_number][blind_type]
+            
+            # Verify shop has items
+            has_items = False
+            for item in shop.items:
+                if item is not None:
+                    has_items = True
+                    break
+            
+            if has_items:
+                print(f"Found valid shop for Ante {ante_number}, {blind_type}")
+                return shop
+            else:
+                print(f"Shop for Ante {ante_number}, {blind_type} has no items")
+    
+    print(f"WARNING: No shop found for Ante {ante_number}, {blind_type}. Creating new shop.")
+    
+    # Create a new shop with appropriate items for this ante/blind
+    new_shop = create_shop_for_ante(ante_number, blind_type)
+    return new_shop
 
 def train_with_curriculum():
     """Enhanced curriculum learning approach with proper state size handling"""
@@ -2355,6 +2437,184 @@ def demonstrate_shop_purchases(env, demo_episodes=100):
     print(f"Generated {len(demonstrations)} shop purchase demonstrations")
     return demonstrations
 
+def create_shop_for_ante(ante_number, blind_type):
+    """Create a new shop with appropriate items for the specified ante and blind type"""
+    print(f"Creating new shop for Ante {ante_number}, {blind_type}")
+    
+    # Try to use FixedShop first
+    try:
+        from Shop import FixedShop
+        shop = FixedShop(ante_number, blind_type)
+        
+        # Verify shop has items
+        has_items = False
+        for item in shop.items:
+            if item is not None:
+                has_items = True
+                break
+        
+        if has_items:
+            return shop
+    except Exception as e:
+        print(f"Failed to create FixedShop: {e}")
+    
+    # Fallback to creating a Shop with manually added items
+    from Shop import Shop, ShopItem, ShopItemType
+    from JokerCreation import create_joker
+    from Tarot import create_tarot_by_name
+    from Planet import create_planet_by_name
+    
+    shop = Shop()
+    
+    # Clear default items
+    shop.items = [None, None, None, None]
+    
+    # Add appropriate items based on ante and blind type
+    if ante_number == 1:
+        if blind_type == "small_blind":
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Green Joker"), 4)
+            shop.items[1] = ShopItem(ShopItemType.PLANET, create_planet_by_name("Mars"), 3) 
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Buffoon Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Celestial Pack", 4)
+        elif blind_type == "medium_blind":
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Delayed Gratification"), 4)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Square"), 4)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Celestial Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Arcana Pack", 4)
+        else:  # boss_blind
+            shop.items[0] = ShopItem(ShopItemType.PLANET, create_planet_by_name("Uranus"), 3)
+            shop.items[1] = ShopItem(ShopItemType.TAROT, create_tarot_by_name("Hierophant"), 3)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Jumbo Arcana Pack", 6)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Celestial Pack", 6)
+    
+    elif ante_number == 2:
+        if blind_type == "small_blind":
+            shop.items[0] = ShopItem(ShopItemType.TAROT, create_tarot_by_name("Hierophant"), 3)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Bootstraps"), 5)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Jumbo Arcana Pack", 6)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Standard Pack", 4)
+        elif blind_type == "medium_blind":
+            shop.items[0] = ShopItem(ShopItemType.TAROT, create_tarot_by_name("Sun"), 3)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Clever"), 4)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Celestial Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Mega Celestial Pack", 8)
+        else:  # boss_blind
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Mad"), 4)
+            shop.items[1] = ShopItem(ShopItemType.TAROT, create_tarot_by_name("Hierophant"), 3)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Standard Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Jumbo Standard Pack", 6)
+    
+    elif ante_number == 3:
+        if blind_type == "small_blind":
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Wily"), 4)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Smiley"), 4)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Jumbo Celestial Pack", 6)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Celestial Pack", 4)
+        elif blind_type == "medium_blind":
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Crafty"), 4)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Cloud 9"), 6)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Jumbo Arcana Pack", 6)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Standard Pack", 4)
+        else:  # boss_blind
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Splash"), 3)
+            shop.items[1] = ShopItem(ShopItemType.TAROT, create_tarot_by_name("Magician"), 3)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Arcana Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Jumbo Celestial Pack", 6)
+    
+    elif ante_number == 4:
+        if blind_type == "small_blind":
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Misprint"), 4)
+            shop.items[1] = ShopItem(ShopItemType.TAROT, create_tarot_by_name("Star"), 3)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Jumbo Arcana Pack", 6)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Arcana Pack", 4)
+        elif blind_type == "medium_blind":
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Wrathful"), 5)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Cartomancer"), 6)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Jumbo Standard Pack", 6)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Buffoon Pack", 4)
+        else:  # boss_blind
+            shop.items[0] = ShopItem(ShopItemType.PLANET, create_planet_by_name("Pluto"), 3)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Clever"), 4)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Celestial Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Arcana Pack", 4)
+    
+    elif ante_number == 5:
+        if blind_type == "small_blind":
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Scary Face"), 4)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Blue"), 5)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Jumbo Buffoon Pack", 6)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Arcana Pack", 4)
+        elif blind_type == "medium_blind":
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Baseball Card"), 8)
+            shop.items[1] = ShopItem(ShopItemType.PLANET, create_planet_by_name("Mars"), 3)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Jumbo Standard Pack", 6)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Standard Pack", 4)
+        else:  # boss_blind
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Socks and Buskin"), 6)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("8 Ball"), 5)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Celestial Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Jumbo Celestial Pack", 6)
+    
+    elif ante_number == 6:
+        if blind_type == "small_blind":
+            shop.items[0] = ShopItem(ShopItemType.TAROT, create_tarot_by_name("Chariot"), 3)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Even Steven"), 4)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Arcana Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Celestial Pack", 4)
+        elif blind_type == "medium_blind":
+            shop.items[0] = ShopItem(ShopItemType.TAROT, create_tarot_by_name("Fool"), 3)
+            shop.items[1] = ShopItem(ShopItemType.TAROT, create_tarot_by_name("Temperance"), 3)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Mega Arcana Pack", 8)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Arcana Pack", 4)
+        else:  # boss_blind
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("The Duo"), 8)
+            shop.items[1] = ShopItem(ShopItemType.TAROT, create_tarot_by_name("Temperance"), 3)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Arcana Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Arcana Pack", 4)
+    
+    elif ante_number == 7:
+        if blind_type == "small_blind":
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Rocket"), 6)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Gluttonous"), 5)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Standard Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Jumbo Standard Pack", 6)
+        elif blind_type == "medium_blind":
+            shop.items[0] = ShopItem(ShopItemType.PLANET, create_planet_by_name("Jupiter"), 3)
+            shop.items[1] = ShopItem(ShopItemType.TAROT, create_tarot_by_name("Devil"), 3)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Standard Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Standard Pack", 4)
+        else:  # boss_blind
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Droll"), 6)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Walkie Talkie"), 4)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Standard Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Jumbo Buffoon Pack", 6)
+    
+    elif ante_number == 8:
+        if blind_type == "small_blind":
+            shop.items[0] = ShopItem(ShopItemType.PLANET, create_planet_by_name("Saturn"), 3)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Blackboard"), 6)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Arcana Pack", 4)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Standard Pack", 4)
+        elif blind_type == "medium_blind":
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Photograph"), 5)
+            shop.items[1] = ShopItem(ShopItemType.PLANET, create_planet_by_name("Neptune"), 3)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Jumbo Arcana Pack", 6)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Celestial Pack", 6)
+        else:  # boss_blind - shouldn't exist for ante 8 but handle it anyway
+            shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Fortune Teller"), 6)
+            shop.items[1] = ShopItem(ShopItemType.JOKER, create_joker("Green Joker"), 4)
+            shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Mega Arcana Pack", 8)
+            shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Jumbo Celestial Pack", 6)
+    
+    # Default items for any other ante (fallback)
+    else:
+        shop.items[0] = ShopItem(ShopItemType.JOKER, create_joker("Green Joker"), 4)
+        shop.items[1] = ShopItem(ShopItemType.PLANET, create_planet_by_name("Mars"), 3)
+        shop.items[2] = ShopItem(ShopItemType.BOOSTER, "Standard Pack", 4)
+        shop.items[3] = ShopItem(ShopItemType.BOOSTER, "Celestial Pack", 4)
+    
+    return shop
+
 def initialize_strategy_agent_with_demonstrations(strategy_agent, env, num_demos=200):
     """Initialize the strategy agent with demonstrations before training"""
     # Generate demonstrations
@@ -2535,7 +2795,7 @@ def train_with_separate_agents():
     Complete training function with improved shop behavior for Balatro RL agent
     """
     # Initialize the environment
-    env = BalatroEnv(config={'add_bootstrap': True})  # Start with a bootstrap joker to help early game
+    env = BalatroEnv(config={})  # Start with a bootstrap joker to help early game
     
     # Get state and action dimensions
     play_state_size = len(env._get_play_state())
@@ -2574,6 +2834,7 @@ def train_with_separate_agents():
         total_reward = 0
         max_ante = 1
         game_steps = 0
+        wins_achieved = 0
         
         # For tracking performance
         play_episode_reward = 0
@@ -2592,6 +2853,17 @@ def train_with_separate_agents():
             
             # SHOP PHASE
             if show_shop_next:
+                if env.game_manager.game.current_ante > 24:
+                    print("\n===== GAME COMPLETED! =====")
+                    print(f"Final score: {env.game_manager.current_score}")
+                    
+                    total_reward += 500.0
+                    
+                    done = True
+                    
+                    wins_achieved += 1
+                    break
+
                 print(f"\n===== SHOP PHASE (Episode {e+1}) =====")
                 
                 # Update shop for current ante
@@ -3121,10 +3393,10 @@ def train_with_game_phases():
                 done = True
                 
                 # Strong negative reward for failing
-                total_reward -= 5.0
+                total_reward -= 50.0
                 
                 # Store transition
-                play_episode_memory.append((state, 0, -5.0, state, True))
+                play_episode_memory.append((state, 0, -50.0, state, True))
                 
                 continue  # Skip to next episode
             
