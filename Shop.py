@@ -195,12 +195,55 @@ class Shop:
     
     def _process_booster(self, booster_type: str, inventory):
         """Process the booster pack and add cards to inventory"""
-        if booster_type == "Standard Pack":
+        if "STANDARD" in booster_type.upper():
             for _ in range(5):
+                # Correct parameter order for Card constructor: (suit, rank)
                 suit = random.choice(list(Suit))
-                rank = random.randint(1, 13)
-                card = Card(rank, suit)
-                inventory.add_card_to_deck(card)
+                rank = random.choice(list(Rank))
+                
+                # Make sure we're passing the right types
+                if not isinstance(suit, Suit) or not isinstance(rank, Rank):
+                    print(f"WARNING: Invalid types - suit: {type(suit)}, rank: {type(rank)}")
+                    # Try to convert if needed
+                    if isinstance(suit, int):
+                        for s in Suit:
+                            if s.value == suit:
+                                suit = s
+                                break
+                    if isinstance(rank, int):
+                        for r in Rank:
+                            if r.value == rank:
+                                rank = r
+                                break
+                
+                # Create the card with correct parameter order
+                try:
+                    card = Card(suit, rank)  # Note the order: suit first, then rank
+                    inventory.add_card_to_deck(card)
+                    print(f"Added {rank.name} of {suit.name} to deck")
+                except Exception as e:
+                    print(f"Error creating card: {e}")
+        
+        # Handle other pack types (Celestial, Arcana, etc.)
+        elif "CELESTIAL" in booster_type.upper():
+            planet_types = [
+                "Mercury", "Venus", "Earth", "Mars", 
+                "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"
+            ]
+            selected_planets = random.sample(planet_types, min(3, len(planet_types)))
+            
+            for planet_name in selected_planets:
+                try:
+                    from Planet import create_planet_by_name
+                    planet = create_planet_by_name(planet_name)
+                    
+                    if planet and hasattr(planet, 'planet_type'):
+                        planet_type = planet.planet_type
+                        current_level = inventory.planet_levels.get(planet_type, 1)
+                        inventory.planet_levels[planet_type] = current_level + 1
+                        print(f"Used {planet_name} to upgrade to level {current_level + 1}")
+                except Exception as e:
+                    print(f"Error processing planet: {e}")
  
 
 
@@ -485,8 +528,25 @@ class FixedShop(Shop):
         self.ante_shops = AnteShops()
         self.ante_number = ante_number
         self.shop_type = shop_type
+        self.items = [None, None, None, None]  # Initialize items list
+        self.discount = 0
+        self.has_voucher = False
         
-        super().__init__()
+        # Initialize with fixed items right away instead of calling parent constructor
+        self._initialize_fixed_shop()
+        
+        print(f"Created FixedShop for Ante {ante_number}, {shop_type}")
+        for i, item in enumerate(self.items):
+            if item is not None:
+                name = "Unknown"
+                if hasattr(item, 'item_type'):
+                    if item.item_type == ShopItemType.JOKER and hasattr(item.item, 'name'):
+                        name = item.item.name
+                    elif item.item_type in [ShopItemType.TAROT, ShopItemType.PLANET] and hasattr(item.item, 'name'):
+                        name = item.item.name
+                    else:
+                        name = str(item.item)
+                print(f"  {i}: {name} - ${item.price if hasattr(item, 'price') else '?'}")
     
     def _initialize_fixed_shop(self):
         """Initialize shop with predefined items from AnteShops"""
@@ -500,10 +560,6 @@ class FixedShop(Shop):
         """Override to ensure shop only provides predetermined items"""
         if any(item is None for item in self.items):
             self._initialize_fixed_shop()
-    
-    def reroll(self, inventory):
-        """Override to disable rerolling in fixed shops"""
-        return False
     
 def initialize_shops_for_game():
     all_shops = {}
@@ -596,7 +652,6 @@ def parse_card(card_string: str) -> Card:
             card.enhancement = CardEnhancement.BONUS
     
     return card
-
 
 
 
