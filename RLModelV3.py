@@ -152,8 +152,7 @@ class BalatroEnv:
                 print(f"  {i}: [Empty]")
 
     def step_strategy(self, action):
-        """Process a strategy action with IMPROVED reward signals and anti-loop measures"""
-        # Make sure we have the current shop
+        """Process a strategy action with IMPROVED reward signals and better item handling"""
         if self.game_manager.game.current_ante > 24:
             print("Game already completed! Starting new game.")
             self.reset()
@@ -182,14 +181,27 @@ class BalatroEnv:
         done = self.game_manager.game_over
         info = {"message": "Unknown action"}
         
-        # Calculate joker count before action
         joker_count_before = len(self.game_manager.game.inventory.jokers)
         ante_num = self.game_manager.game.current_ante
         
         # Get current money before action
         money_before = self.game_manager.game.inventory.money
         
-        if action < 4:  # BUY ACTIONS - SIGNIFICANTLY IMPROVED LOGIC
+        joker_names = set()
+        for joker in self.game_manager.game.inventory.jokers:
+            if hasattr(joker, 'name'):
+                joker_names.add(joker.name)
+        joker_diversity = len(joker_names)
+        
+        min_expected_jokers = min(3, ante_num)
+        joker_deficit = max(0, min_expected_jokers - joker_count_before)
+        
+        planet_count = len([c for c in self.game_manager.game.inventory.consumables 
+                            if hasattr(c, 'type') and c.type == ConsumableType.PLANET])
+        
+        tarot_count = len(self.game_manager.game.inventory.get_consumable_tarot_indices())
+        
+        if action < 4:
             slot = action
             if self.current_shop and slot < len(self.current_shop.items) and self.current_shop.items[slot] is not None:
                 item = self.current_shop.items[slot]
@@ -202,84 +214,138 @@ class BalatroEnv:
                         if item.item_type == ShopItemType.JOKER:
                             item_name = item.item.name if hasattr(item.item, 'name') else "Joker"
                             
-                            # Base reward scales with ante (much higher for early game)
-                            base_reward = 25.0 * (1.0 / (0.5 * ante_num))  # Stronger early game incentive
+                            base_reward = 25.0 * (1.0 / (0.5 * ante_num))
                             
-                            # First joker bonus - CRITICAL for success
                             if joker_count_before == 0:
-                                base_reward *= 3.0  # Triple reward for first joker
+                                base_reward *= 3.5
                                 
-                            # Bonus for specific powerful jokers - EXPANDED LIST
+                            joker_exists = item_name in joker_names
+                            if not joker_exists:
+                                diversity_bonus = 15.0
+                                if ante_num >= 3:
+                                    diversity_bonus *= 1.5
+                                base_reward += diversity_bonus
+                                
                             powerful_jokers = [
                                 "Mr. Bones", "Green Joker", "Bootstraps", "Socks and Buskin",
-                                "The Duo", "8 Ball", "Rocket", "Gros Michel", "Fibonacci"
+                                "The Duo", "Rocket", "Blackboard", "Smiley"
                             ]
                             if hasattr(item.item, 'name') and item.item.name in powerful_jokers:
-                                tier_multiplier = 1.5 if ante_num <= 3 else 1.0  # Even stronger early game
-                                base_reward += 20.0 * tier_multiplier  # Double bonus for key jokers
+                                tier_multiplier = 1.5 if ante_num <= 3 else 1.0
+                                # Reduce the power of Green Joker relative to others to avoid over-reliance
+                                if item.item.name == "Green Joker" and joker_count_before >= 1:
+                                    tier_multiplier *= 0.7  # Reduce green joker's dominance
+                                base_reward += 20.0 * tier_multiplier
                                 
-                            # Joker count management - avoid too many jokers
-                            if joker_count_before >= 4:
-                                base_reward *= 0.8  # Reduced incentive when we have many jokers
-                                
-                            # Price efficiency - reward MORE for good deals
+                            if joker_count_before < min_expected_jokers:
+                                base_reward *= 1.5
+                            elif joker_count_before >= 6:  
+                                base_reward *= 0.7
+                            
                             value_multiplier = 1.0
                             if price <= 3:
-                                value_multiplier = 2.0  # Great deal!
+                                value_multiplier = 2.0
                             elif price <= 5:
-                                value_multiplier = 1.5  # Good deal
+                                value_multiplier = 1.5
                                 
                             reward = base_reward * value_multiplier
                             
-                        # ENHANCED PLANET REWARDS - More strategic early game
                         elif item.item_type == ShopItemType.PLANET:
                             item_name = item.item.name if hasattr(item.item, 'name') else "Planet"
                             
-                            # Higher base reward, especially early
-                            base_reward = 10.0 * (1.0 / (0.7 * ante_num))
+                            base_reward = 15.0 * (1.0 / (0.7 * ante_num))
                             
-                            # Bonus for specific useful planets - TIERED APPROACH
+                            if planet_count == 0:
+                                base_reward *= 1.8
+                            
+                            planet_type = None
+                            if hasattr(item.item, 'planet_type'):
+                                planet_type = item.item.planet_type
+                                current_level = self.game_manager.game.inventory.planet_levels.get(planet_type, 1)
+                                
+                                if current_level <= 2:
+                                    base_reward *= 1.2
+                                elif current_level >= 5:
+                                    base_reward *= 0.8
+                            
                             if hasattr(item.item, 'name'):
-                                if item.item.name in ["Venus", "Earth", "Saturn"]:
-                                    base_reward += 10.0  # Top tier planets
-                                elif item.item.name in ["Mars", "Neptune", "Jupiter"]:
-                                    base_reward += 6.0   # Good planets
+                                if item.item.name in ["jupiter", "earth", "saturn"]:
+                                    base_reward += 12.0 
+                                elif item.item.name in ["uranus", "neptune", "venus"]:
+                                    base_reward += 8.0
                                 else:
-                                    base_reward += 3.0   # Other planets still useful
+                                    base_reward += 4.0
+                            
+                            if ante_num >= 4:
+                                base_reward *= 1.2  # Reduced from 1.3
                                     
                             reward = base_reward
                             
-                        # ENHANCED TAROT REWARDS - More strategic
+                        # ENHANCED TAROT REWARDS - IMPROVED IMPLEMENTATION
                         elif item.item_type == ShopItemType.TAROT:
                             item_name = item.item.name if hasattr(item.item, 'name') else "Tarot"
                             
-                            # Higher base reward
-                            base_reward = 8.0
+                            # MODIFIED: More balanced base reward
+                            base_reward = 15.0  # Reduced from 18.0
+                            
+                            # MODIFIED: Add balanced bonus for first tarot
+                            if tarot_count == 0:
+                                base_reward *= 1.7  # Reduced from 2.0
                             
                             # Bonus for specific powerful tarots - EXPANDED LIST
                             if hasattr(item.item, 'name'):
-                                if item.item.name in ["Magician", "World", "Sun", "Devil", "Moon", "Tower"]:
-                                    base_reward += 8.0  # Top tier tarots
-                                elif item.item.name in ["Hierophant", "Chariot", "Emperor", "Hermit"]:
-                                    base_reward += 5.0  # Good tarots
+                                if item.item.name in ["magician", "fool", "high priestess", "justice", "hermit", "judgement"]:
+                                    base_reward += 10.0  # Reduced from 12.0
+                                elif item.item.name in ["hierophant", "chariot", "emperor"]:
+                                    base_reward += 6.0  # Reduced from 8.0
+                            
+                            if ante_num >= 3:
+                                base_reward *= 1.2  # Reduced from 1.25
+                                
+                            # Add the tarot to pending_tarots for later use 
+                            self.pending_tarots.append(item_name)
                                     
                             reward = base_reward
                             
-                        # BOOSTER REWARDS - More strategic approach
+                        # BOOSTER REWARDS - MORE BALANCED FOR PACKS
                         elif item.item_type == ShopItemType.BOOSTER:
                             item_name = str(item.item) if hasattr(item, 'item') else "Booster"
                             
                             # Base reward depends on ante and money available
                             money_ratio = self.game_manager.game.inventory.money / (price * 2)
-                            base_reward = 4.0 * min(money_ratio, 1.5)
+                            
+                            # MODIFIED: Base reward scales with joker count and ante
+                            base_reward = 6.0 * min(money_ratio, 1.5)  # Reduced from 7.0
+                            
+                            # Determine pack type and modify reward
+                            pack_type = str(item.item).upper()
+                            
+                            # Increased rewards for valuable pack types
+                            if "BUFFOON" in pack_type:
+                                # Joker packs are very valuable
+                                base_reward *= 1.8  # Strong incentive for Buffoon packs
+                                
+                                # Even more valuable when we need jokers
+                                if joker_count_before < min_expected_jokers:
+                                    base_reward *= 1.4
+                            elif "ARCANA" in pack_type:
+                                # Tarot packs
+                                base_reward *= 1.4
+                            elif "CELESTIAL" in pack_type:
+                                # Planet packs
+                                base_reward *= 1.3
                             
                             # Extra reward for better packs
-                            if "JUMBO" in str(item.item) or "MEGA" in str(item.item):
-                                base_reward *= 1.5
+                            if "JUMBO" in pack_type or "MEGA" in pack_type:
+                                base_reward *= 1.5  # Reduced from 1.7
                                 
-                            # EARLY GAME: Less incentive for boosters when we need jokers
-                            if joker_count_before < 2 and ante_num <= 3:
-                                base_reward *= 0.5  # Discourage boosters before getting jokers
+                            # MODIFIED: Encourage packs more when we have a decent joker base
+                            if joker_count_before >= 3:
+                                base_reward *= 1.2  # Reduced from 1.3
+                            elif joker_count_before < 1 and ante_num <= 3:
+                                base_reward *= 0.5  # Discourage packs before getting jokers
+                            elif joker_count_before < 2 and ante_num <= 3:
+                                base_reward *= 0.7  # Modified from 0.6 - slightly less discouragement
                                 
                             reward = base_reward
                     
@@ -288,6 +354,38 @@ class BalatroEnv:
                     if success:
                         info['message'] = f"Bought {item_name} for ${price}"
                         print(f"Bought {item_name} for ${price}, reward: {reward}")
+                        
+                        # ADDED: SPECIAL HANDLING FOR BOOSTER PACKS
+                        if item.item_type == ShopItemType.BOOSTER:
+                            # Get pack contents
+                            pack_contents = self.get_shop_item_contents(item)
+                            if pack_contents:
+                                # Open the pack and handle the contents
+                                pack_type = str(item.item)
+                                result_message = self.handle_pack_opening(pack_type, pack_contents, 
+                                                                        self.game_manager.game.inventory, 
+                                                                        self.game_manager)
+                                info['message'] += f" {result_message}"
+                        
+                        # ADDED: SPECIAL HANDLING FOR PLANETS
+                        elif item.item_type == ShopItemType.PLANET:
+                            # Automatically use planets like in GameTest.py
+                            if hasattr(item.item, 'planet_type'):
+                                planet_type = item.item.planet_type
+                                current_level = self.game_manager.game.inventory.planet_levels.get(planet_type, 1)
+                                
+                                # Find the planet in consumables and remove it
+                                planet_indices = self.game_manager.game.inventory.get_consumable_planet_indices()
+                                for idx in planet_indices:
+                                    consumable = self.game_manager.game.inventory.consumables[idx]
+                                    if (hasattr(consumable.item, 'planet_type') and 
+                                        consumable.item.planet_type == planet_type):
+                                        self.game_manager.game.inventory.remove_consumable(idx)
+                                        break
+                                
+                                # Update planet level
+                                self.game_manager.game.inventory.planet_levels[planet_type] = current_level + 1
+                                info['message'] += f" Upgraded {item_name} to level {current_level + 1}"
                     else:
                         reward = 0  # No reward if purchase fails
                 else:
@@ -295,7 +393,8 @@ class BalatroEnv:
                     reward = -0.2
                     info['message'] = f"Not enough money to buy item (costs ${price})"
         
-        elif action < 9:  # SELL JOKER ACTIONS - Improved logic for strategic selling
+        # SELL JOKER ACTIONS - Improved logic for strategic selling
+        elif action < 9:  
             joker_idx = action - 4
             if joker_idx < len(self.game_manager.game.inventory.jokers):
                 joker = self.game_manager.game.inventory.jokers[joker_idx]
@@ -309,35 +408,43 @@ class BalatroEnv:
                 if hasattr(joker, 'sell_value'):
                     sell_value = joker.sell_value
                     
-                    # Desperate selling - reward if money is very low
+                    # MODIFIED: Desperate selling - reward if money is very low
                     if self.game_manager.game.inventory.money < 2:
-                        reward = 2.0  # Higher reward for getting needed money
+                        # Higher reward for selling when desperate for money
+                        reward = 3.0  # Increased from 2.0 for more desperation selling
+                    elif self.game_manager.game.inventory.money < 4 and ante_num >= 3:
+                        # Moderate reward for selling when money is tight in later antes
+                        reward = 1.5
                     else:
-                        # Discourage selling valuable jokers
+                        # MODIFIED: Stronger discouragement for selling valuable jokers
                         tier_penalty = 0.0
                         if sell_value >= 4:
-                            tier_penalty = -2.0  # Strong penalty for selling valuable jokers
+                            tier_penalty = -4.0  # Increased from -2.0
                         elif sell_value >= 3:
-                            tier_penalty = -1.0  # Moderate penalty
+                            tier_penalty = -2.0  # Increased from -1.0
                             
                         reward += tier_penalty
                     
-                    # Special case: too many jokers (5+)
-                    if len(self.game_manager.game.inventory.jokers) > 4:
-                        reward += 1.0  # Good to make space
+                    # MODIFIED: Special case: too many jokers (6+ instead of 5+)
+                    if len(self.game_manager.game.inventory.jokers) > 5:
+                        reward += 2.0  # Increased from 1.0 - good to make space
                         
                         # Calculate the relative value vs other jokers
                         all_values = [j.sell_value for j in self.game_manager.game.inventory.jokers if hasattr(j, 'sell_value')]
                         if all_values:
                             avg_value = sum(all_values) / len(all_values)
-                            if sell_value < avg_value:
-                                reward += 1.5  # Good to sell below-average jokers
+                            if sell_value < avg_value * 0.8:  # Clearly below average
+                                reward += 2.0  # Increased from 1.5 - good to sell below-average jokers
                 
-                # Don't sell specific key jokers except in dire circumstances
-                critical_jokers = ["Mr. Bones", "Green Joker", "Bootstraps", "Socks and Buskin"]
+                # MODIFIED: Don't sell specific key jokers except in dire circumstances
+                critical_jokers = ["Mr. Bones", "Green Joker", "Bootstraps", "Socks and Buskin", "The Duo", "8 Ball", "Rocket"]
                 if hasattr(joker, 'name') and joker.name in critical_jokers:
                     if self.game_manager.game.inventory.money >= 2:
-                        reward -= 3.0  # Heavy penalty for selling key jokers with money
+                        reward -= 4.0  # Increased from 3.0 - heavy penalty for selling key jokers with money
+                
+                # ADDED: Discourage selling when below minimum expected jokers for the ante
+                if joker_count_before <= min_expected_jokers:
+                    reward -= 3.0  # Strong penalty for selling when we don't have enough jokers
                 
                 # Execute the sell
                 sell_value = self.current_shop.sell_item("joker", joker_idx, self.game_manager.game.inventory)
@@ -372,24 +479,24 @@ class BalatroEnv:
                 
                 success, message = self.game_manager.use_tarot(actual_idx, selected_indices)
                 if success:
-                    # Higher reward for using tarot - increased from 3.0 to 5.0
-                    reward = 5.0
+                    # MODIFIED: Reward for using tarot - balanced
+                    reward = 6.0  # Reduced from 7.0
                     
                     # IMPROVED TAROT STRATEGY: Much better matching of tarots to strategies
                     if hasattr(tarot, 'name'):
                         # Tarots that work best with high cards
                         if tarot.name in ["Magician", "Devil", "Sun", "Star"]:
                             if selection_strategy == 2:
-                                reward += 3.0
+                                reward += 3.0  # Reduced from 4.0
                             elif selection_strategy != 2:
-                                reward -= 1.0  # Penalty for incorrect usage
+                                reward -= 1.5  # Reduced from 2.0
                                 
                         # Tarots that work best with low cards
                         elif tarot.name in ["Tower", "Death", "Moon"]:
                             if selection_strategy == 1:
-                                reward += 3.0
+                                reward += 3.0  # Reduced from 4.0
                             elif selection_strategy != 1:
-                                reward -= 1.0  # Penalty for incorrect usage
+                                reward -= 1.5  # Reduced from 2.0
                     
                     info['message'] = message
                     print(f"Used {tarot_name}: {message}, reward: {reward}")
@@ -400,26 +507,48 @@ class BalatroEnv:
             money_efficiency = min(1.0, money_before / 8.0)  # Cap at 1.0
             money_penalty = 0.0
             
-            # Penalize having too much money at the end of a shop round
-            if money_before > 10:
-                money_penalty = -2.0  # Penalty for hoarding money
+            # MODIFIED: Penalty for having too much money
+            if money_before > 12:
+                money_penalty = -3.0  # Reduced from -4.0
+            elif money_before > 8:
+                money_penalty = -1.5  # Reduced from -2.0
             
-            # Significantly increased reward for advancing to next ante
-            base_reward = 15.0  
+            # Base reward for advancing
+            base_reward = 18.0
             
             # Scale reward by the current ante (higher antes = higher rewards)
             ante_bonus = self.game_manager.game.current_ante * 3.0
             
-            # Add incentive based on joker count
+            # MODIFIED: More nuanced joker count bonus
             joker_count = len(self.game_manager.game.inventory.jokers)
+            
+            # ADDED: Penalize for having too few jokers in later antes
+            joker_deficit_penalty = 0.0
+            if ante_num >= 3 and joker_count < min_expected_jokers:
+                joker_deficit_penalty = -8.0 * (min_expected_jokers - joker_count)  # Reduced from -10.0
+            
+            # MODIFIED: Adjust joker bonus based on diversity
             joker_bonus = joker_count * 3.0
+            if joker_diversity <= 1 and ante_num >= 2:
+                # Penalty for relying on only one type of joker
+                joker_bonus *= 0.6  # Increased from 0.5 - less severe penalty
+            elif joker_diversity <= 2 and ante_num >= 3:
+                # Moderate penalty for low diversity in later stages
+                joker_bonus *= 0.8  # Increased from 0.7 - less severe penalty
             
             # Add incentive for having saved SOME money
             money = self.game_manager.game.inventory.money
             money_bonus = min(money / 8.0, 5.0)  # Cap at 5.0
             
+            # ADDED: Bonus for having planets/tarots - Reduced
+            planets_tarots_bonus = (planet_count + tarot_count) * 1.5  # Reduced from 2.0
+            
             # Calculate total reward with money efficiency factor
-            reward = (base_reward + ante_bonus + joker_bonus + money_bonus) * (0.8 + 0.2*money_efficiency) + money_penalty
+            reward = (base_reward + ante_bonus + joker_bonus + money_bonus + planets_tarots_bonus) * (0.8 + 0.2*money_efficiency) + money_penalty + joker_deficit_penalty
+            
+            # Use pending tarots before advancing to next ante
+            if self.pending_tarots and self.game_manager.current_hand:
+                self.use_pending_tarots()
             
             # Execute the next ante action
             success = self.game_manager.next_ante()
@@ -440,6 +569,302 @@ class BalatroEnv:
         next_state = self._get_strategy_state()
         return next_state, reward, done, info
 
+    def get_shop_item_contents(self, shop_item):
+        """
+        Extract contents directly from a shop item if available
+        
+        Args:
+            shop_item: The shop item object
+            
+        Returns:
+            list: Contents of the item if it's a booster pack, otherwise None
+        """
+        if shop_item.item_type == ShopItemType.BOOSTER:
+            pack_type = str(shop_item.item)
+            
+            if hasattr(shop_item, 'contents'):
+                return shop_item.contents
+                
+            return self.get_pack_contents(pack_type)
+            
+        return None
+
+
+    def get_pack_contents(self, pack_type):
+        """
+        Get the contents of a pack based on its type
+        
+        Args:
+            pack_type: The type of pack (e.g., "Standard Pack")
+            
+        Returns:
+            list: The contents of the pack
+        """
+        try:
+            # Try to find pack_type in PackType enum
+            pack_enum = None
+            for pt in PackType:
+                if pt.value == pack_type:
+                    pack_enum = pt
+                    break
+            
+            if pack_enum is None:
+                print(f"WARNING: Unknown pack type: {pack_type}")
+                return []
+            
+            from Shop import AnteShops
+            ante_shops = AnteShops()
+            
+            # Search through all ante shops for matching pack
+            for ante_num in range(1, 9):
+                if ante_num not in ante_shops.ante_shops:
+                    continue
+                    
+                for blind_type in ["small_blind", "medium_blind", "boss_blind"]:
+                    if blind_type not in ante_shops.ante_shops[ante_num]:
+                        continue
+                        
+                    shop_items = ante_shops.ante_shops[ante_num][blind_type]
+                    
+                    for item in shop_items:
+                        if (item.get("item_type") == ShopItemType.BOOSTER and 
+                            item.get("pack_type") == pack_enum and
+                            "contents" in item):
+                            print(f"Found contents for {pack_type}: {item['contents']}")
+                            return item["contents"]
+            
+            print(f"Warning: No contents found for pack type: {pack_type}")
+            return []
+        except Exception as e:
+            print(f"Error in get_pack_contents: {e}")
+            return []
+
+
+    def handle_pack_opening(self, pack_type, pack_contents, inventory, game_manager=None):
+        """
+        Handle opening a booster pack and selecting items from it
+        
+        Args:
+            pack_type (str): The type of pack (Standard, Celestial, Arcana, etc.)
+            pack_contents (list): List of items in the pack
+            inventory: The game inventory to add items to
+            game_manager: Optional GameManager for tarot card usage
+            
+        Returns:
+            str: Message about what happened with the pack
+        """
+        from JokerCreation import create_joker
+        from Tarot import create_tarot_by_name
+        from Planet import create_planet_by_name
+        from Card import Card
+        from Enums import Suit, Rank, CardEnhancement
+        
+        print(f"\n=== Opening {pack_type} ===")
+        print("Pack contents:")
+        
+        for i, item in enumerate(pack_contents):
+            print(f"{i}: {item}")
+        
+        if "MEGA" in pack_type.upper():
+            num_to_select = 2
+        else:
+            num_to_select = 1
+        
+        message = ""
+        
+        if "STANDARD" in pack_type.upper():
+            for i in range(min(num_to_select, len(pack_contents))):
+                # Simple AI: randomly select a card from the pack
+                selected_idx = random.randint(0, len(pack_contents) - 1)
+                
+                try:
+                    card_string = pack_contents[selected_idx]
+                    print(f"Processing card string: '{card_string}'")
+                    
+                    parts = card_string.split()
+                    if not parts:
+                        print(f"WARNING: Empty card string")
+                        continue
+                    
+                    # Map strings to proper Rank enums
+                    rank_map = {
+                        "A": Rank.ACE, 
+                        "2": Rank.TWO,
+                        "3": Rank.THREE,
+                        "4": Rank.FOUR,
+                        "5": Rank.FIVE,
+                        "6": Rank.SIX,
+                        "7": Rank.SEVEN,
+                        "8": Rank.EIGHT,
+                        "9": Rank.NINE,
+                        "10": Rank.TEN,
+                        "J": Rank.JACK, 
+                        "Q": Rank.QUEEN, 
+                        "K": Rank.KING
+                    }
+                    
+                    # Map strings to proper Suit enums
+                    suit_map = {
+                        "heart": Suit.HEARTS, 
+                        "hearts": Suit.HEARTS, 
+                        "♥": Suit.HEARTS,
+                        "diamond": Suit.DIAMONDS, 
+                        "diamonds": Suit.DIAMONDS, 
+                        "♦": Suit.DIAMONDS,
+                        "club": Suit.CLUBS, 
+                        "clubs": Suit.CLUBS, 
+                        "♣": Suit.CLUBS,
+                        "spade": Suit.SPADES, 
+                        "spades": Suit.SPADES, 
+                        "♠": Suit.SPADES
+                    }
+                    
+                    # Get rank from first part of string
+                    rank_str = parts[0]
+                    rank = rank_map.get(rank_str)
+                    
+                    if rank is None:
+                        try:
+                            rank_value = int(rank_str)
+                            for r in Rank:
+                                if r.value == rank_value:
+                                    rank = r
+                                    break
+                            if rank is None:
+                                print(f"WARNING: Invalid rank '{rank_str}', defaulting to ACE")
+                                rank = Rank.ACE
+                        except ValueError:
+                            print(f"WARNING: Invalid rank '{rank_str}', defaulting to ACE")
+                            rank = Rank.ACE
+
+                    # Get suit from last part of string
+                    suit_str = parts[-1].lower() if len(parts) > 1 else "hearts"
+                    suit = suit_map.get(suit_str, Suit.HEARTS)
+                    if suit_str not in suit_map:
+                        print(f"WARNING: Invalid suit '{suit_str}', defaulting to HEARTS")
+                    
+                    # Create card with proper Suit and Rank enums
+                    if not isinstance(rank, Rank) or not isinstance(suit, Suit):
+                        print(f"ERROR: Invalid rank or suit type - rank: {type(rank)}, suit: {type(suit)}")
+                        continue
+                        
+                    card = Card(suit, rank)
+                    
+                    # Debug print
+                    print(f"Created card: {card}, rank type: {type(card.rank)}, suit type: {type(card.suit)}")
+                    
+                    # Apply enhancement if specified
+                    enhancement_map = {
+                        "foil": CardEnhancement.FOIL,
+                        "holo": CardEnhancement.HOLO,
+                        "poly": CardEnhancement.POLY,
+                        "wild": CardEnhancement.WILD,
+                        "steel": CardEnhancement.STEEL,
+                        "glass": CardEnhancement.GLASS,
+                        "gold": CardEnhancement.GOLD,
+                        "stone": CardEnhancement.STONE,
+                        "lucky": CardEnhancement.LUCKY,
+                        "mult": CardEnhancement.MULT,
+                        "bonus": CardEnhancement.BONUS,
+                        "blue": None,  # "blue stamp" is handled specially
+                        "stamp": None  # Part of "blue stamp" or similar
+                    }
+                    
+                    for part in parts[1:-1]:
+                        part_lower = part.lower()
+                        if part_lower in enhancement_map and enhancement_map[part_lower] is not None:
+                            card.enhancement = enhancement_map[part_lower]
+                        elif part_lower == "blue" and "stamp" in [p.lower() for p in parts[1:-1]]:
+                            # Handle special case for "blue stamp"
+                            card.enhancement = CardEnhancement.FOIL
+                    
+                    # Validate card before adding
+                    if hasattr(card, 'rank') and hasattr(card, 'suit') and isinstance(card.rank, Rank) and isinstance(card.suit, Suit):
+                        inventory.add_card_to_deck(card)
+                        message += f"Added {card_string} to deck. "
+                        print(f"Successfully added {card_string} to deck")
+                    else:
+                        error_msg = f"Card validation failed: {str(card.__dict__)}"
+                        print(error_msg)
+                        message += f"Failed to add card: {error_msg}. "
+                    
+                except Exception as e:
+                    print(f"Error processing card: {e}")
+                    message += f"Failed to add card: {e}. "
+        
+        elif "CELESTIAL" in pack_type.upper():
+            # Handle Celestial packs (planets)
+            for i in range(min(num_to_select, len(pack_contents))):
+                selected_idx = random.randint(0, len(pack_contents) - 1)
+                planet_name = pack_contents[selected_idx]
+                
+                try:
+                    from Planet import create_planet_by_name
+                    planet = create_planet_by_name(planet_name)
+                    if planet and hasattr(planet, 'planet_type'):
+                        planet_type = planet.planet_type
+                        current_level = inventory.planet_levels.get(planet_type, 1)
+                        inventory.planet_levels[planet_type] = current_level + 1
+                        
+                        message += f"Used {planet_name} planet to upgrade to level {current_level + 1}. "
+                        print(f"Used {planet_name} planet to upgrade to level {current_level + 1}")
+                    else:
+                        message += f"Failed to process planet {planet_name}. "
+                        print(f"Failed to process planet {planet_name}")
+                except Exception as e:
+                    print(f"Error processing planet: {e}")
+                    message += f"Failed to upgrade planet: {e}. "
+        
+        elif "ARCANA" in pack_type.upper():
+            # Handle Arcana packs (tarots)
+            for i in range(min(num_to_select, len(pack_contents))):
+                selected_idx = random.randint(0, len(pack_contents) - 1)
+                tarot_name = pack_contents[selected_idx]
+                
+                try:
+                    from Tarot import create_tarot_by_name
+                    tarot = create_tarot_by_name(tarot_name)
+                    if tarot:
+                        # Add tarot to inventory
+                        inventory.add_consumable(tarot)
+                        message += f"Added {tarot_name} tarot to inventory. "
+                        print(f"Added {tarot_name} tarot to inventory")
+                        
+                        # Also add to pending_tarots for later use
+                        self.pending_tarots.append(tarot_name)
+                    else:
+                        message += f"Failed to create tarot {tarot_name}. "
+                        print(f"Failed to create tarot {tarot_name}")
+                except Exception as e:
+                    print(f"Error processing tarot: {e}")
+                    message += f"Failed to add tarot: {e}. "
+        
+        elif "BUFFOON" in pack_type.upper():
+            # Handle Buffoon packs (jokers)
+            for i in range(min(num_to_select, len(pack_contents))):
+                selected_idx = random.randint(0, len(pack_contents) - 1)
+                joker_name = pack_contents[selected_idx]
+                
+                try:
+                    from JokerCreation import create_joker
+                    joker = create_joker(joker_name)
+                    if joker:
+                        if len(inventory.jokers) < 5:
+                            inventory.add_joker(joker)
+                            message += f"Added {joker_name} joker to inventory. "
+                            print(f"Added {joker_name} joker to inventory")
+                        else:
+                            message += f"No space for joker {joker_name}. "
+                            print(f"No space for joker {joker_name}")
+                    else:
+                        message += f"Failed to create joker {joker_name}. "
+                        print(f"Failed to create joker {joker_name}")
+                except Exception as e:
+                    print(f"Error processing joker: {e}")
+                    message += f"Failed to add joker: {e}. "
+        
+        return message
+    
     def step_play(self, action):
         """Process a playing action with stricter enforcement of rules"""
         self.episode_step += 1
@@ -1019,6 +1444,57 @@ class BalatroEnv:
             encoded.append(normalized_level)
         
         return np.array(encoded)
+    
+
+    def use_pending_tarots(self):
+        """
+        Use tarot cards that were purchased from the shop
+        """
+        if not self.pending_tarots:
+            return False
+        
+        print("\n=== Using Tarot Cards From Shop ===")
+        used_any = False
+        
+        for tarot_name in self.pending_tarots.copy():
+            tarot_indices = self.game_manager.game.inventory.get_consumable_tarot_indices()
+            tarot_index = None
+            
+            for idx in tarot_indices:
+                consumable = self.game_manager.game.inventory.consumables[idx]
+                if hasattr(consumable.item, 'name') and consumable.item.name.lower() == tarot_name.lower():
+                    tarot_index = idx
+                    break
+            
+            if tarot_index is None:
+                print(f"Could not find tarot {tarot_name} in inventory")
+                continue
+                
+            tarot = self.game_manager.game.inventory.consumables[tarot_index].item
+            cards_required = tarot.selected_cards_required if hasattr(tarot, 'selected_cards_required') else 0
+            
+            if cards_required > len(self.game_manager.current_hand):
+                print(f"Not enough cards to use {tarot_name}, needs {cards_required}")
+                continue
+                
+            selected_indices = []
+            
+            if cards_required > 0:
+                card_values = [(i, card.rank.value) for i, card in enumerate(self.game_manager.current_hand)]
+                card_values.sort(key=lambda x: x[1])
+                selected_indices = [idx for idx, _ in card_values[:cards_required]]
+            
+            success, message = self.game_manager.use_tarot(tarot_index, selected_indices)
+            if success:
+                print(f"Used {tarot_name}: {message}")
+                self.pending_tarots.remove(tarot_name)
+                used_any = True
+            else:
+                print(f"Failed to use {tarot_name}: {message}")
+        
+        return used_any
+
+
 
     def get_valid_play_actions(self):
         """Return valid play actions with proper handling for end-of-round cases"""
@@ -1882,7 +2358,7 @@ class StrategyAgent:
             
             # Increase priority for purchase actions (0-3) with positive rewards
             if action < 4 and reward > 0:
-                priority *= 2.0  # Double priority for successful purchases
+                priority *= 8.0  # Double priority for successful purchases
                 
             # Also increase priority for advancing to next ante
             if action == 15 and reward > 0:
@@ -2148,11 +2624,13 @@ def add_demonstration_examples(play_agent, num_examples=300):
 
 
 def train_with_separate_agents():
-    """
-    Complete training function with improved shop behavior for Balatro RL agent
-    """
+    """Training function with improved shop behavior for Balatro RL agent and win tracking"""
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.ticker import MaxNLocator
+    
     # Initialize the environment
-    env = BalatroEnv(config={})  # Start with a bootstrap joker to help early game
+    env = BalatroEnv(config={})
     
     # Get state and action dimensions
     play_state_size = len(env._get_play_state())
@@ -2168,8 +2646,6 @@ def train_with_separate_agents():
     play_agent = PlayingAgent(state_size=play_state_size, action_size=play_action_size)
     strategy_agent = StrategyAgent(state_size=strategy_state_size, action_size=strategy_action_size)
     
- 
-    
     # Add basic play demonstrations for play_agent
     add_demonstration_examples(play_agent, num_examples=200)
     
@@ -2182,26 +2658,44 @@ def train_with_separate_agents():
     # Training stats
     play_rewards = []
     strategy_rewards = []
-    max_antes = []
-    jokers_purchased = 0
+    
+    # Tracking metrics over time
+    win_history = []  # Track if episode was a win (reached ante 8+)
+    max_ante_history = []  # Track max ante reached in each episode
+    win_rate_over_time = []  # Track win rate over time
+    avg_max_ante_over_time = []  # Track average max ante over time
+    
+    # Item purchase history
+    jokers_purchased_history = []
+    planets_purchased_history = []
+    tarots_purchased_history = []
+    packs_opened_history = []
+    
+    # For win rate rolling window
+    win_window_size = 100
+    rolling_wins = []
     
     for e in range(episodes):
         env.reset()
         total_reward = 0
         max_ante = 1
         game_steps = 0
-        wins_achieved = 0
         
         # For tracking performance
         play_episode_reward = 0
         strategy_episode_reward = 0
         items_purchased = 0
         episode_jokers_purchased = 0
+        episode_planets_purchased = 0
+        episode_tarots_purchased = 0
+        episode_packs_opened = 0
         
-        # Game loop control flags (similar to GameTest.py)
+        # For tracking joker diversity
+        unique_jokers = set()
+        
+        # Game loop control flags
         done = False
         show_shop_next = False
-        pending_tarots = []
         
         # Game loop
         while not done and game_steps < 500:  # Limit to prevent infinite loops
@@ -2214,10 +2708,7 @@ def train_with_separate_agents():
                     print(f"Final score: {env.game_manager.current_score}")
                     
                     total_reward += 500.0
-                    
                     done = True
-                    
-                    wins_achieved += 1
                     break
 
                 print(f"\n===== SHOP PHASE (Episode {e+1}) =====")
@@ -2257,9 +2748,33 @@ def train_with_separate_agents():
                         # Track joker purchases specifically
                         if "joker" in message.lower():
                             episode_jokers_purchased += 1
+                            
+                            # Try to extract joker name for diversity tracking
+                            parts = message.split("Bought ")
+                            if len(parts) > 1:
+                                name_parts = parts[1].split(" for $")
+                                if len(name_parts) > 0:
+                                    joker_name = name_parts[0].strip()
+                                    unique_jokers.add(joker_name)
+                        
+                        # Track planet purchases
+                        elif "planet" in message.lower():
+                            episode_planets_purchased += 1
+                            
+                        # Track tarot purchases
+                        elif "tarot" in message.lower():
+                            episode_tarots_purchased += 1
+                            
+                        # Track pack purchases
+                        elif any(pack_type in message.lower() for pack_type in ["pack", "buffoon", "celestial", "arcana"]):
+                            episode_packs_opened += 1
                     
                     # Check if we're advancing to next ante (exit shop)
                     if strategy_action == 15 or done:
+                        # Check if we have pending tarots to use before advancing
+                        if hasattr(env, 'pending_tarots') and env.pending_tarots and env.game_manager.current_hand:
+                            env.use_pending_tarots()
+                        
                         shop_done = True
                         show_shop_next = False
                         print(f"Advanced to Ante {env.game_manager.game.current_ante}")
@@ -2303,16 +2818,36 @@ def train_with_separate_agents():
             # Track max ante reached
             max_ante = max(max_ante, env.game_manager.game.current_ante)
         
-        # Update total jokers purchased
-        jokers_purchased += episode_jokers_purchased
+        # Record metrics for this episode
+        is_win = max_ante >= 8  # Consider reaching ante 8+ a win
+        win_history.append(1 if is_win else 0)
+        max_ante_history.append(max_ante)
+        
+        # Record purchase history
+        jokers_purchased_history.append(episode_jokers_purchased)
+        planets_purchased_history.append(episode_planets_purchased)
+        tarots_purchased_history.append(episode_tarots_purchased)
+        packs_opened_history.append(episode_packs_opened)
+        
+        # Update rolling win window
+        rolling_wins.append(1 if is_win else 0)
+        if len(rolling_wins) > win_window_size:
+            rolling_wins.pop(0)
+        
+        # Calculate current rolling win rate and average max ante
+        current_win_rate = 100 * sum(rolling_wins) / len(rolling_wins)
+        win_rate_over_time.append(current_win_rate)
+        
+        # Average max ante over last 100 episodes
+        recent_antes = max_ante_history[-win_window_size:] if len(max_ante_history) >= win_window_size else max_ante_history
+        avg_max_ante = sum(recent_antes) / len(recent_antes)
+        avg_max_ante_over_time.append(avg_max_ante)
         
         # Train agents using improved methods
         if len(play_agent.memory) >= batch_size:
-            # Regular replay for play agent
             play_agent.replay(batch_size)
         
         if len(strategy_agent.memory) >= batch_size:
-            # Prioritized replay for strategy agent
             strategy_agent.prioritized_strategy_replay(batch_size)
         
         # Decay exploration rates
@@ -2322,21 +2857,25 @@ def train_with_separate_agents():
         # Track episode statistics
         play_rewards.append(play_episode_reward)
         strategy_rewards.append(strategy_episode_reward)
-        max_antes.append(max_ante)
         
         # Logging
         if (e + 1) % log_interval == 0:
             avg_play_reward = sum(play_rewards[-log_interval:]) / log_interval
             avg_strategy_reward = sum(strategy_rewards[-log_interval:]) / log_interval
-            avg_ante = sum(max_antes[-log_interval:]) / log_interval
+            avg_ante = sum(max_ante_history[-log_interval:]) / log_interval
+            win_rate = 100 * sum(win_history[-log_interval:]) / log_interval
             
             print(f"\n===== Episode {e+1}/{episodes} =====")
             print(f"Play Agent Reward: {avg_play_reward:.2f}")
             print(f"Strategy Agent Reward: {avg_strategy_reward:.2f}")
             print(f"Average Max Ante: {avg_ante:.2f}")
+            print(f"Win Rate (last {log_interval} episodes): {win_rate:.2f}%")
             print(f"Items Purchased in Episode: {items_purchased}")
             print(f"Jokers Purchased in Episode: {episode_jokers_purchased}")
-            print(f"Total Jokers Purchased: {jokers_purchased}")
+            print(f"Planets Purchased in Episode: {episode_planets_purchased}")
+            print(f"Tarots Purchased in Episode: {episode_tarots_purchased}")
+            print(f"Packs Opened in Episode: {episode_packs_opened}")
+            print(f"Unique Joker Types: {len(unique_jokers)}")
             print(f"Play Epsilon: {play_agent.epsilon:.3f}")
             print(f"Strategy Epsilon: {strategy_agent.epsilon:.3f}")
         
@@ -2344,20 +2883,111 @@ def train_with_separate_agents():
         if (e + 1) % save_interval == 0:
             play_agent.save_model(f"play_agent_ep{e+1}.h5")
             strategy_agent.save_model(f"strategy_agent_ep{e+1}.h5")
-            
-            # Evaluate performance
-            eval_results = evaluate_with_purchase_tracking(play_agent, strategy_agent, episodes=20)
-            print(f"\n===== Evaluation at Episode {e+1} =====")
-            print(f"Win Rate: {eval_results['win_rate']:.2f}%")
-            print(f"Average Max Ante: {eval_results['average_score']:.2f}")
-            print(f"Average Items Purchased: {eval_results['avg_items_purchased']:.2f}")
-            print(f"Joker Purchase Rate: {eval_results['item_types']['joker_percent']:.2f}%")
     
     # Final save
     play_agent.save_model("play_agent_final.h5")
     strategy_agent.save_model("strategy_agent_final.h5")
     
+    # Generate plots at the end of training
+    print("\n===== Generating Training Plots =====")
+    plot_training_metrics(episodes, win_history, max_ante_history, win_rate_over_time, 
+                          avg_max_ante_over_time, jokers_purchased_history,
+                          planets_purchased_history, tarots_purchased_history,
+                          packs_opened_history)
+    
     return play_agent, strategy_agent
+
+
+def plot_training_metrics(episodes, win_history, max_ante_history, win_rate_over_time, 
+                          avg_max_ante_over_time, jokers_history, planets_history, 
+                          tarots_history, packs_history):
+    """Plot the training metrics over time."""
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.ticker import MaxNLocator
+    
+    # Create figure with subplots
+    plt.figure(figsize=(15, 12))
+    
+    # Plot 1: Win Rate Over Time
+    plt.subplot(2, 2, 1)
+    plt.plot(np.arange(1, len(win_rate_over_time) + 1), win_rate_over_time)
+    plt.title('Win Rate Over Time (100-episode rolling window)')
+    plt.xlabel('Episode')
+    plt.ylabel('Win Rate (%)')
+    plt.grid(True)
+    
+    # Plot 2: Average Max Ante Over Time
+    plt.subplot(2, 2, 2)
+    plt.plot(np.arange(1, len(avg_max_ante_over_time) + 1), avg_max_ante_over_time)
+    plt.title('Average Max Ante Over Time (100-episode rolling window)')
+    plt.xlabel('Episode')
+    plt.ylabel('Average Max Ante')
+    plt.grid(True)
+    plt.gca().yaxis.set_major_locator(MaxNLocator(integer=True))
+    
+    # Plot 3: Max Ante per Episode (heatmap/scatter)
+    plt.subplot(2, 2, 3)
+    plt.scatter(np.arange(1, len(max_ante_history) + 1), max_ante_history, 
+               alpha=0.3, s=3, c=max_ante_history, cmap='viridis')
+    
+    # Add a horizontal line at ante 8 (win threshold)
+    plt.axhline(y=8, color='r', linestyle='--', alpha=0.7, label='Win Threshold (Ante 8)')
+    
+    plt.title('Max Ante Reached per Episode')
+    plt.xlabel('Episode')
+    plt.ylabel('Max Ante')
+    plt.grid(True)
+    plt.colorbar(label='Ante Level')
+    plt.legend()
+    plt.gca().yaxis.set_major_locator(MaxNLocator(integer=True))
+    
+    # Plot 4: Item Purchases Over Time (stacked area)
+    plt.subplot(2, 2, 4)
+    
+    # Calculate moving average with window size 100
+    window_size = 100
+    jokers_smooth = moving_average(jokers_history, window_size)
+    planets_smooth = moving_average(planets_history, window_size)
+    tarots_smooth = moving_average(tarots_history, window_size)
+    packs_smooth = moving_average(packs_history, window_size)
+    
+    # Make sure all arrays have the same length
+    min_length = min(len(jokers_smooth), len(planets_smooth), len(tarots_smooth), len(packs_smooth))
+    jokers_smooth = jokers_smooth[:min_length]
+    planets_smooth = planets_smooth[:min_length]
+    tarots_smooth = tarots_smooth[:min_length]
+    packs_smooth = packs_smooth[:min_length]
+    
+    # Create x-axis values
+    x = np.arange(window_size, window_size + min_length)
+    
+    plt.stackplot(x, 
+                 jokers_smooth, planets_smooth, tarots_smooth, packs_smooth,
+                 labels=['Jokers', 'Planets', 'Tarots', 'Packs'],
+                 colors=['#ff9999', '#66b3ff', '#99ff99', '#ffcc99'],
+                 alpha=0.7)
+    
+    plt.title('Item Purchases Over Time (100-episode rolling average)')
+    plt.xlabel('Episode')
+    plt.ylabel('Average Items Purchased')
+    plt.grid(True)
+    plt.legend(loc='upper left')
+    
+    plt.tight_layout()
+    plt.savefig('balatro_training_metrics.png', dpi=300)
+    print("Plots saved as 'balatro_training_metrics.png'")
+    plt.show()
+
+
+def moving_average(data, window_size):
+    """Calculate the moving average of a list."""
+    if len(data) < window_size:
+        return [sum(data) / len(data)] * len(data)
+    
+    ret = np.cumsum(data, dtype=float)
+    ret[window_size:] = ret[window_size:] - ret[:-window_size]
+    return ret[window_size - 1:] / window_size
 
 
 
