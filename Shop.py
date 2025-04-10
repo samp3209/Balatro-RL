@@ -267,7 +267,7 @@ class AnteShops:
             ],
             "medium_blind": [
                 {"item_type": ShopItemType.JOKER, "name": "Delayed Gratification", "price": 4},
-                {"item_type": ShopItemType.JOKER, "name": "Square", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "Bootstraps", "price": 5},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.CELESTIAL, "price": 4, 
                  "contents": ["Saturn", "Uranus", "Pluto"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.ARCANA, "price": 4, 
@@ -286,7 +286,7 @@ class AnteShops:
         shops[2] = {
             "small_blind": [
                 {"item_type": ShopItemType.TAROT, "name": "Hierophant", "price": 3},
-                {"item_type": ShopItemType.JOKER, "name": "Bootstraps", "price": 5},
+                {"item_type": ShopItemType.JOKER, "name": "Droll", "price": 4},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_ARCANA, "price": 6, 
                  "contents": ["Tower", "Moon", "Chariot", "World", "Wheel of Fortune"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.STANDARD, "price": 4, 
