@@ -14,6 +14,9 @@ from tensorflow.keras.layers import Dense, Flatten, Conv1D, MaxPooling1D, Dropou
 from tensorflow.keras.optimizers import Adam
 import tensorflow as tf
 import random
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.ticker import MaxNLocator
 
 
 class BalatroEnv:
@@ -2625,9 +2628,6 @@ def add_demonstration_examples(play_agent, num_examples=300):
 
 def train_with_separate_agents():
     """Training function with improved shop behavior for Balatro RL agent and win tracking"""
-    import matplotlib.pyplot as plt
-    import numpy as np
-    from matplotlib.ticker import MaxNLocator
     
     # Initialize the environment
     env = BalatroEnv(config={})
@@ -2650,10 +2650,10 @@ def train_with_separate_agents():
     add_demonstration_examples(play_agent, num_examples=200)
     
     # Training parameters
-    episodes = 5000
+    episodes = 10000
     batch_size = 64
-    log_interval = 50
-    save_interval = 500
+    log_interval = 500
+    save_interval = 1000
     
     # Training stats
     play_rewards = []
@@ -2670,7 +2670,8 @@ def train_with_separate_agents():
     planets_purchased_history = []
     tarots_purchased_history = []
     packs_opened_history = []
-    
+    joker_acquisition_counts = {}
+
     # For win rate rolling window
     win_window_size = 100
     rolling_wins = []
@@ -2713,13 +2714,11 @@ def train_with_separate_agents():
 
                 print(f"\n===== SHOP PHASE (Episode {e+1}) =====")
                 
-                # Update shop for current ante
                 env.update_shop()
                 
-                # Process shop actions until we advance to next ante
                 shop_done = False
                 shop_steps = 0
-                max_shop_steps = 20  # Limit shop steps to prevent getting stuck
+                max_shop_steps = 50
                 
                 while not shop_done and not done and shop_steps < max_shop_steps:
                     shop_steps += 1
@@ -2749,14 +2748,15 @@ def train_with_separate_agents():
                         if "joker" in message.lower():
                             episode_jokers_purchased += 1
                             
-                            # Try to extract joker name for diversity tracking
+                            # Extract joker name from the message
                             parts = message.split("Bought ")
                             if len(parts) > 1:
                                 name_parts = parts[1].split(" for $")
                                 if len(name_parts) > 0:
                                     joker_name = name_parts[0].strip()
                                     unique_jokers.add(joker_name)
-                        
+                                    joker_acquisition_counts[joker_name] = joker_acquisition_counts.get(joker_name, 0) + 1
+
                         # Track planet purchases
                         elif "planet" in message.lower():
                             episode_planets_purchased += 1
@@ -2819,7 +2819,7 @@ def train_with_separate_agents():
             max_ante = max(max_ante, env.game_manager.game.current_ante)
         
         # Record metrics for this episode
-        is_win = max_ante >= 8  # Consider reaching ante 8+ a win
+        is_win = max_ante > 24
         win_history.append(1 if is_win else 0)
         max_ante_history.append(max_ante)
         
@@ -2879,24 +2879,94 @@ def train_with_separate_agents():
             print(f"Play Epsilon: {play_agent.epsilon:.3f}")
             print(f"Strategy Epsilon: {strategy_agent.epsilon:.3f}")
         
-        # Save models periodically
         if (e + 1) % save_interval == 0:
             play_agent.save_model(f"play_agent_ep{e+1}.h5")
             strategy_agent.save_model(f"strategy_agent_ep{e+1}.h5")
     
-    # Final save
     play_agent.save_model("play_agent_final.h5")
     strategy_agent.save_model("strategy_agent_final.h5")
     
-    # Generate plots at the end of training
     print("\n===== Generating Training Plots =====")
     plot_training_metrics(episodes, win_history, max_ante_history, win_rate_over_time, 
                           avg_max_ante_over_time, jokers_purchased_history,
                           planets_purchased_history, tarots_purchased_history,
                           packs_opened_history)
-    
+    plot_joker_usage(joker_acquisition_counts)
+
     return play_agent, strategy_agent
 
+def track_joker_usage(env, episodes=50):
+    """Track which jokers are acquired and used most frequently"""
+    env.reset()
+    
+    # Dictionary to track joker frequency
+    joker_counts = {}
+    
+    for e in range(episodes):
+        env.reset()
+        done = False
+        game_steps = 0
+        
+        # Track jokers seen in this episode
+        episode_jokers = set()
+        
+        while not done and game_steps < 500:
+            game_steps += 1
+            
+            # Check current jokers in inventory
+            for joker in env.game_manager.game.inventory.jokers:
+                if hasattr(joker, 'name'):
+                    joker_name = joker.name
+                    episode_jokers.add(joker_name)
+                    joker_counts[joker_name] = joker_counts.get(joker_name, 0) + 1
+            
+            # Take a random action just to advance the game
+            if hasattr(env, 'current_shop') and env.current_shop is not None:
+                valid_actions = env.get_valid_strategy_actions()
+                if valid_actions:
+                    _, _, done, _ = env.step_strategy(random.choice(valid_actions))
+            else:
+                valid_actions = env.get_valid_play_actions()
+                if valid_actions:
+                    _, _, done, info = env.step_play(random.choice(valid_actions))
+                    if info.get('shop_phase', False) and not done:
+                        env.update_shop()
+        
+        if e % 10 == 0:
+            print(f"Tracked jokers in {e+1}/{episodes} episodes")
+            
+    return joker_counts
+
+def plot_joker_usage(joker_counts, top_n=15):
+    """Create a bar chart showing the most frequently used jokers"""
+    # Sort jokers by frequency
+    sorted_jokers = sorted(joker_counts.items(), key=lambda x: x[1], reverse=True)
+    
+    # Take top N jokers
+    top_jokers = sorted_jokers[:top_n]
+    
+    # Separate names and counts
+    names = [j[0] for j in top_jokers]
+    counts = [j[1] for j in top_jokers]
+    
+    # Create plot
+    plt.figure(figsize=(14, 8))
+    bars = plt.bar(names, counts, color='skyblue')
+    
+    # Add value labels on top of bars
+    for bar in bars:
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                f'{height:.0f}', ha='center', va='bottom')
+    
+    plt.title(f'Top {top_n} Most Frequently Used Jokers')
+    plt.xlabel('Joker Name')
+    plt.ylabel('Frequency')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.savefig('joker_usage_frequency.png', dpi=300)
+    plt.show()
 
 def plot_training_metrics(episodes, win_history, max_ante_history, win_rate_over_time, 
                           avg_max_ante_over_time, jokers_history, planets_history, 
@@ -3088,8 +3158,8 @@ def evaluate_with_purchase_tracking(play_agent, strategy_agent, episodes=20):
         results['item_types']['tarot'] += tarots_bought
         results['item_types']['booster'] += boosters_bought
         
-        # Consider a win if reached ante 8
-        if max_ante >= 8:
+        # Consider a win if beat ante 8 (round 24)
+        if max_ante > 24:
             results['win_rate'] += 1
     
     # Calculate final metrics
@@ -3197,8 +3267,7 @@ def evaluate_agents(play_agent, strategy_agent, episodes=100):
         results['max_antes'].append(max_ante)
         results['hands_played'].append(hands_played)
         
-        # Consider a win if player reached ante 8 or higher
-        if max_ante >= 8:
+        if max_ante > 24:
             game_won = True
         results['win_rate'] += 1 if game_won else 0
         
