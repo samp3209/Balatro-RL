@@ -46,7 +46,6 @@ class HandEvaluator:
             HandType.STRAIGHT_FLUSH: []
         }
         
-        # Find basic patterns
         HandEvaluator._find_high_cards(cards, patterns)
         HandEvaluator._find_pairs(cards, patterns)
         HandEvaluator._find_three_of_a_kinds(cards, patterns)
@@ -54,12 +53,10 @@ class HandEvaluator:
         HandEvaluator._find_straights(cards, patterns)
         HandEvaluator._find_flushes(cards, patterns)
         
-        # Find complex patterns that build on simpler ones
         HandEvaluator._find_two_pairs(patterns)
         HandEvaluator._find_full_houses(patterns)
         HandEvaluator._find_straight_flushes(cards, patterns)
         
-        # Determine best hand type
         best_type = HandType.HIGH_CARD
         for hand_type in [HandType.STRAIGHT_FLUSH, HandType.FOUR_OF_A_KIND, 
                         HandType.FULL_HOUSE, HandType.FLUSH, HandType.STRAIGHT,
@@ -73,31 +70,25 @@ class HandEvaluator:
     @staticmethod
     def _find_high_cards(cards: List[Card], patterns: Dict[HandType, List[HandPattern]]):
         """Find high cards in the hand, accounting for STONE cards"""
-        # Sort by rank value (highest first)
         sorted_cards = sorted(cards, key=lambda card: card.rank.value, reverse=True)
         
-        # Skip STONE cards as they have no rank for high card
         non_stone_cards = [card for card in sorted_cards if card.enhancement != CardEnhancement.STONE]
         
-        # Take the highest card as the high card pattern
         if non_stone_cards:
             patterns[HandType.HIGH_CARD].append(HandPattern(HandType.HIGH_CARD, [non_stone_cards[0]]))
-        elif sorted_cards:  # If we only have STONE cards, use one anyway
+        elif sorted_cards:
             patterns[HandType.HIGH_CARD].append(HandPattern(HandType.HIGH_CARD, [sorted_cards[0]]))
     
     @staticmethod
     def _find_pairs(cards: List[Card], patterns: Dict[HandType, List[HandPattern]]):
         """Find all pairs in the hand, handling STONE cards and WILD cards"""
-        # Group cards by rank, excluding STONE cards which have no rank
         rank_groups = defaultdict(list)
         for card in cards:
             if card.enhancement != CardEnhancement.STONE:
                 rank_groups[card.rank.value].append(card)
             
-        # Find pairs
         for rank, group in rank_groups.items():
             if len(group) >= 2:
-                # Create a pattern for each possible pair combination
                 for i in range(len(group) - 1):
                     for j in range(i + 1, len(group)):
                         pair_cards = [group[i], group[j]]
@@ -106,16 +97,13 @@ class HandEvaluator:
     @staticmethod
     def _find_three_of_a_kinds(cards: List[Card], patterns: Dict[HandType, List[HandPattern]]):
         """Find all three of a kinds in the hand, handling STONE and WILD cards"""
-        # Group cards by rank, excluding STONE cards which have no rank
         rank_groups = defaultdict(list)
         for card in cards:
             if card.enhancement != CardEnhancement.STONE:
                 rank_groups[card.rank.value].append(card)
             
-        # Find three of a kinds
         for rank, group in rank_groups.items():
             if len(group) >= 3:
-                # Create a pattern for each possible three of a kind combination
                 for i in range(len(group) - 2):
                     for j in range(i + 1, len(group) - 1):
                         for k in range(j + 1, len(group)):
@@ -127,16 +115,14 @@ class HandEvaluator:
     @staticmethod
     def _find_four_of_a_kinds(cards: List[Card], patterns: Dict[HandType, List[HandPattern]]):
         """Find all four of a kinds in the hand, handling STONE and WILD cards"""
-        # Group cards by rank, excluding STONE cards which have no rank
         rank_groups = defaultdict(list)
         for card in cards:
             if card.enhancement != CardEnhancement.STONE:
                 rank_groups[card.rank.value].append(card)
             
-        # Find four of a kinds
         for rank, group in rank_groups.items():
             if len(group) >= 4:
-                four_cards = group[:4]  # Take the first four cards
+                four_cards = group[:4]  
                 patterns[HandType.FOUR_OF_A_KIND].append(
                     HandPattern(HandType.FOUR_OF_A_KIND, four_cards)
                 )
@@ -144,20 +130,15 @@ class HandEvaluator:
     @staticmethod
     def _find_straights(cards: List[Card], patterns: Dict[HandType, List[HandPattern]]):
         """Find all straights in the hand, handling STONE and WILD cards"""
-        # Skip STONE cards as they have no rank for straights
         non_stone_cards = [card for card in cards if card.enhancement != CardEnhancement.STONE]
         
-        # Get unique rank values
         unique_ranks = sorted(set(card.rank.value for card in non_stone_cards))
         
-        # Find 5-card straights
         for i in range(len(unique_ranks) - 4):
             if unique_ranks[i+4] - unique_ranks[i] == 4:
-                # This is a straight
                 straight_ranks = set(range(unique_ranks[i], unique_ranks[i] + 5))
                 straight_cards = [card for card in non_stone_cards if card.rank.value in straight_ranks]
                 
-                # Need to select exactly one card of each rank
                 final_straight = []
                 for rank in range(unique_ranks[i], unique_ranks[i] + 5):
                     for card in straight_cards:
@@ -170,7 +151,6 @@ class HandEvaluator:
                         HandPattern(HandType.STRAIGHT, final_straight)
                     )
         
-        # Check for A-2-3-4-5 straight (Ace = 1)
         if set([14, 2, 3, 4, 5]).issubset(set(unique_ranks)):
             straight_cards = []
             for rank in [14, 2, 3, 4, 5]:
@@ -187,10 +167,8 @@ class HandEvaluator:
     @staticmethod
     def _find_flushes(cards: List[Card], patterns: Dict[HandType, List[HandPattern]]):
         """Find all flushes in the hand, handling WILD and STONE cards"""
-        # Skip STONE cards as they have no suit for flushes
         non_stone_cards = [card for card in cards if card.enhancement != CardEnhancement.STONE]
         
-        # Group cards by suit, with special handling for WILD cards
         suit_groups = defaultdict(list)
         wild_cards = []
         
@@ -200,16 +178,13 @@ class HandEvaluator:
             else:
                 suit_groups[card.suit].append(card)
         
-        # Add wild cards to all suit groups
         for suit in suit_groups:
             suit_groups[suit].extend(wild_cards)
         
-        # Find flushes
         for suit, group in suit_groups.items():
             if len(group) >= 5:
-                # Sort by rank (highest first) for best flush
                 sorted_group = sorted(group, key=lambda card: card.rank.value, reverse=True)
-                flush_cards = sorted_group[:5]  # Take the five highest cards
+                flush_cards = sorted_group[:5] 
                 
                 patterns[HandType.FLUSH].append(
                     HandPattern(HandType.FLUSH, flush_cards)
@@ -221,18 +196,15 @@ class HandEvaluator:
         pairs = patterns[HandType.PAIR]
         
         if len(pairs) >= 2:
-            # Check all combinations of pairs
             for i in range(len(pairs) - 1):
                 for j in range(i + 1, len(pairs)):
                     pair1 = pairs[i]
                     pair2 = pairs[j]
                     
-                    # Check if the pairs don't share any cards
                     pair1_ids = {id(card) for card in pair1.cards}
                     pair2_ids = {id(card) for card in pair2.cards}
                     
                     if not pair1_ids.intersection(pair2_ids):
-                        # Check that the ranks are different
                         pair1_ranks = {card.rank.value for card in pair1.cards 
                                       if card.enhancement != CardEnhancement.WILD}
                         pair2_ranks = {card.rank.value for card in pair2.cards 
@@ -254,28 +226,25 @@ class HandEvaluator:
             return
             
         for three in three_of_a_kinds:
-            # Get the rank of the three of a kind, ignoring WILD cards
             three_rank = None
             for card in three.cards:
                 if card.enhancement != CardEnhancement.WILD:
                     three_rank = card.rank.value
                     break
             
-            if three_rank is None:  # All wild cards - can be any rank
+            if three_rank is None: 
                 three_rank = -1
             
             for pair in pairs:
-                # Get the rank of the pair, ignoring WILD cards
                 pair_rank = None
                 for card in pair.cards:
                     if card.enhancement != CardEnhancement.WILD:
                         pair_rank = card.rank.value
                         break
                 
-                if pair_rank is None:  # All wild cards - can be any rank
+                if pair_rank is None:
                     pair_rank = -2
                 
-                # Check for shared cards between the three of a kind and pair
                 three_ids = {id(card) for card in three.cards}
                 pair_ids = {id(card) for card in pair.cards}
                 
@@ -288,10 +257,8 @@ class HandEvaluator:
     @staticmethod
     def _find_straight_flushes(cards: List[Card], patterns: Dict[HandType, List[HandPattern]]):
         """Find straight flushes by looking for straights that are also flushes, handling enhanced cards"""
-        # Skip STONE cards as they have no rank or suit
         non_stone_cards = [card for card in cards if card.enhancement != CardEnhancement.STONE]
         
-        # Group cards by suit, with special handling for WILD cards
         suit_groups = defaultdict(list)
         wild_cards = []
         
@@ -301,23 +268,19 @@ class HandEvaluator:
             else:
                 suit_groups[card.suit].append(card)
         
-        # Add wild cards to all suit groups
         for suit in suit_groups:
             suit_groups[suit].extend(wild_cards)
         
-        # Check each suit group for straights
         for suit, suited_cards in suit_groups.items():
             if len(suited_cards) >= 5:
                 rank_values = sorted(set(card.rank.value for card in suited_cards))
                 
-                # Find 5-card sequences
                 for i in range(len(rank_values) - 4):
                     if rank_values[i+4] - rank_values[i] == 4:
                         straight_ranks = set(range(rank_values[i], rank_values[i] + 5))
                         straight_flush_cards = []
                         
                         for rank in straight_ranks:
-                            # First try to find a natural card of this rank and suit
                             natural_card = None
                             for card in suited_cards:
                                 if card.rank.value == rank and card.enhancement != CardEnhancement.WILD:
@@ -327,7 +290,6 @@ class HandEvaluator:
                             if natural_card:
                                 straight_flush_cards.append(natural_card)
                             else:
-                                # If no natural card, use a wild card
                                 for card in suited_cards:
                                     if card.enhancement == CardEnhancement.WILD and not any(id(card) == id(c) for c in straight_flush_cards):
                                         straight_flush_cards.append(card)
@@ -338,11 +300,9 @@ class HandEvaluator:
                                 HandPattern(HandType.STRAIGHT_FLUSH, straight_flush_cards)
                             )
                 
-                # Check for A-2-3-4-5 straight flush
                 if set([14, 2, 3, 4, 5]).issubset(set(rank_values)):
                     straight_flush_cards = []
                     for rank in [14, 2, 3, 4, 5]:
-                        # First try to find a natural card of this rank and suit
                         natural_card = None
                         for card in suited_cards:
                             if card.rank.value == rank and card.enhancement != CardEnhancement.WILD:
@@ -352,7 +312,6 @@ class HandEvaluator:
                         if natural_card:
                             straight_flush_cards.append(natural_card)
                         else:
-                            # If no natural card, use a wild card
                             for card in suited_cards:
                                 if card.enhancement == CardEnhancement.WILD and not any(id(card) == id(c) for c in straight_flush_cards):
                                     straight_flush_cards.append(card)
@@ -397,14 +356,11 @@ class HandEvaluator:
             cards: All cards being played
             scoring_cards: Cards that make up the best hand
         """
-        # Reset scoring flag for all cards
         for card in cards:
             card.scored = False
             
-        # Get identifying information for scoring cards (accounting for WILD cards)
         scoring_card_ids = set(id(card) for card in scoring_cards)
         
-        # Mark cards that match
         for card in cards:
             if id(card) in scoring_card_ids:
                 card.scored = True

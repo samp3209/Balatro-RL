@@ -309,7 +309,6 @@ def get_pack_contents(pack_type):
         list: The contents of the pack
     """
     try:
-        # Try to find pack_type in PackType enum
         pack_enum = None
         for pt in PackType:
             if pt.value == pack_type:
@@ -323,7 +322,6 @@ def get_pack_contents(pack_type):
         from Shop import AnteShops
         ante_shops = AnteShops()
         
-        # Search through all ante shops for matching pack
         for ante_num in range(1, 9):
             if ante_num not in ante_shops.ante_shops:
                 continue
@@ -352,11 +350,9 @@ def get_shop_for_current_ante(game_manager, all_shops):
     """Get the appropriate shop for the current ante and blind"""
     current_ante = game_manager.game.current_ante
     
-    # Calculate ante number (1-8) based on game progression
     ante_number = ((current_ante - 1) // 3) + 1
     
-    # Determine blind type
-    blind_index = (current_ante - 1) % 3  # This gives 0, 1, or 2
+    blind_index = (current_ante - 1) % 3 
     blind_type_map = {
         0: "small_blind",
         1: "medium_blind", 
@@ -370,7 +366,6 @@ def get_shop_for_current_ante(game_manager, all_shops):
     if ante_number in all_shops and blind_type in all_shops[ante_number]:
         return all_shops[ante_number][blind_type]
     
-    # Fallback to creating a new shop
     print(f"WARNING: Shop not found for Ante {ante_number}, {blind_type}. Creating new shop.")
     return Shop()
 
@@ -408,7 +403,6 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
     
     if "STANDARD" in pack_type.upper():
         for i in range(min(num_to_select, len(pack_contents))):
-            # Simple AI: randomly select a card from the pack
             selected_idx = random.randint(0, len(pack_contents) - 1)
             
             try:
@@ -420,7 +414,6 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                     print(f"WARNING: Empty card string")
                     continue
                 
-                # Map strings to proper Rank enums
                 rank_map = {
                     "A": Rank.ACE, 
                     "2": Rank.TWO,
@@ -437,7 +430,6 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                     "K": Rank.KING
                 }
                 
-                # Map strings to proper Suit enums
                 suit_map = {
                     "heart": Suit.HEARTS, 
                     "hearts": Suit.HEARTS, 
@@ -453,7 +445,6 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                     "♠": Suit.SPADES
                 }
                 
-                # Get rank from first part of string
                 rank_str = parts[0]
                 rank = rank_map.get(rank_str)
                 
@@ -471,23 +462,19 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                         print(f"WARNING: Invalid rank '{rank_str}', defaulting to ACE")
                         rank = Rank.ACE
 
-                # Get suit from last part of string
                 suit_str = parts[-1].lower() if len(parts) > 1 else "hearts"
                 suit = suit_map.get(suit_str, Suit.HEARTS)
                 if suit_str not in suit_map:
                     print(f"WARNING: Invalid suit '{suit_str}', defaulting to HEARTS")
                 
-                # Create card with proper Suit and Rank enums
                 if not isinstance(rank, Rank) or not isinstance(suit, Suit):
                     print(f"ERROR: Invalid rank or suit type - rank: {type(rank)}, suit: {type(suit)}")
                     continue
                     
                 card = Card(suit, rank)
                 
-                # Debug print
                 print(f"Created card: {card}, rank type: {type(card.rank)}, suit type: {type(card.suit)}")
                 
-                # Apply enhancement if specified
                 enhancement_map = {
                     "foil": CardEnhancement.FOIL,
                     "holo": CardEnhancement.HOLO,
@@ -500,8 +487,8 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                     "lucky": CardEnhancement.LUCKY,
                     "mult": CardEnhancement.MULT,
                     "bonus": CardEnhancement.BONUS,
-                    "blue": None,  # "blue stamp" is handled specially
-                    "stamp": None  # Part of "blue stamp" or similar
+                    "blue": None, 
+                    "stamp": None  
                 }
                 
                 for part in parts[1:-1]:
@@ -509,10 +496,8 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                     if part_lower in enhancement_map and enhancement_map[part_lower] is not None:
                         card.enhancement = enhancement_map[part_lower]
                     elif part_lower == "blue" and "stamp" in [p.lower() for p in parts[1:-1]]:
-                        # Handle special case for "blue stamp"
                         card.enhancement = CardEnhancement.FOIL
                 
-                # Validate card before adding
                 if hasattr(card, 'rank') and hasattr(card, 'suit') and isinstance(card.rank, Rank) and isinstance(card.suit, Suit):
                     inventory.add_card_to_deck(card)
                     message += f"Added {card_string} to deck. "
@@ -527,7 +512,6 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                 message += f"Failed to add card: {e}. "
     
     elif "CELESTIAL" in pack_type.upper():
-        # Existing code for Celestial packs
         for i in range(min(num_to_select, len(pack_contents))):
             selected_idx = random.randint(0, len(pack_contents) - 1)
             planet_name = pack_contents[selected_idx]
@@ -549,8 +533,6 @@ def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
                 message += f"Failed to upgrade planet: {e}. "
     
     elif "ARCANA" in pack_type.upper() or "BUFFOON" in pack_type.upper():
-        # Existing code for Arcana and Buffoon packs
-        # No changes needed here as it doesn't create cards
         pass
     
     return message
@@ -569,7 +551,7 @@ def simulate_game():
             game_manager.game.inventory.add_joker(joker)
             print(f"Added {joker_name} to inventory")
     
-    game_manager.game.inventory.money = 100 #set value higher for debugging
+    game_manager.game.inventory.money = 100
     
     print("\n===== STARTING GAME =====")
     print(f"Current Ante: {game_manager.game.current_ante}, Blind: {game_manager.game.current_blind}")
@@ -577,7 +559,6 @@ def simulate_game():
     print(f"Money: ${game_manager.game.inventory.money}")
     print_planet_levels(game_manager.game.inventory)
 
-    # Game loop
     max_rounds = 75
     rounds_played = 0
     max_loop_iterations = 75

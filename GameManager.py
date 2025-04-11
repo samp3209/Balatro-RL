@@ -251,6 +251,8 @@ class GameManager:
         Returns:
             Tuple of (success, message)
         """
+        self.discarded_indices = card_indices.copy()
+
         if not card_indices:
             return (False, "No cards selected to discard")
             

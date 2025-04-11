@@ -23,11 +23,10 @@ class BalatroEnv:
     def __init__(self, config=None):
         self.game_manager = GameManager()
         self.config = {
-            'simplified': False,  # Simplified rules for initial learning
-            'full_features': False  # All game features enabled
+            'simplified': False,
+            'full_features': False
         }
         
-        # Update with provided config
         if config:
             self.config.update(config)
         
@@ -39,7 +38,6 @@ class BalatroEnv:
         self.episode_step = 0
         self.episode_max_blind = 0
         
-        # Initialize the game and shop
         self.start_new_game()
         self.all_shops = initialize_shops_for_game()
         self.current_shop = None
@@ -53,7 +51,6 @@ class BalatroEnv:
             self.game_manager.game.is_boss_blind = False
             self.game_manager.max_hands_per_round = 4
             
-        # Initialize shop for the starting ante
         self.update_shop()
         
         print(f"\n===== STARTING NEW GAME =====")
@@ -90,14 +87,11 @@ class BalatroEnv:
         """Update the shop for the current ante with improved reliability"""
         current_ante = self.game_manager.game.current_ante
         
-        # Check if we've beaten the game (ante > 24)
         if current_ante > 24:
             print("Game completed! No more shops available.")
-            # Create an empty shop or use a victory shop
             self.current_shop = Shop()
             return
         
-        # Calculate ante number (1-8) and blind type
         ante_number = ((current_ante - 1) // 3) + 1
         
         blind_index = (current_ante - 1) % 3
@@ -111,32 +105,26 @@ class BalatroEnv:
         
         print(f"Looking for shop for Ante {ante_number} ({blind_type})")
         
-        # Skip boss_blind for Ante 8 - it doesn't exist
         if ante_number == 8 and blind_type == "boss_blind":
             print("No boss_blind exists for Ante 8, creating victory shop")
-            # Create a special "victory" shop
             self.current_shop = Shop()
-            self.current_shop.items = [None, None, None, None]  # Empty shop for victory
+            self.current_shop.items = [None, None, None, None]
             return
         
-        # Ensure all_shops is initialized
         if not hasattr(self, 'all_shops') or self.all_shops is None:
             self.all_shops = initialize_shops_for_game()
         
-        # Get the shop from all_shops, with proper error handling
         shop = None
         if ante_number in self.all_shops:
             if blind_type in self.all_shops[ante_number]:
                 shop = self.all_shops[ante_number][blind_type]
         
-        # If shop is None or empty, create a new one
         if shop is None:
             print(f"Shop not found for Ante {ante_number}, {blind_type}, creating new shop")
             shop = create_shop_for_ante(ante_number, blind_type)
         
         self.current_shop = shop
         
-        # Display shop contents for debugging
         print(f"Updated shop for Round {current_ante} ({blind_type})")
         print("Shop contents:")
         for i, item in enumerate(self.current_shop.items):
@@ -187,7 +175,6 @@ class BalatroEnv:
         joker_count_before = len(self.game_manager.game.inventory.jokers)
         ante_num = self.game_manager.game.current_ante
         
-        # Get current money before action
         money_before = self.game_manager.game.inventory.money
         
         joker_names = set()
@@ -230,14 +217,11 @@ class BalatroEnv:
                                 base_reward += diversity_bonus
                                 
                             powerful_jokers = [
-                                "Mr. Bones", "Green Joker", "Bootstraps", "Socks and Buskin",
+                                "Mr. Bones", "Bootstraps", "Socks and Buskin",
                                 "The Duo", "Rocket", "Blackboard", "Smiley"
                             ]
                             if hasattr(item.item, 'name') and item.item.name in powerful_jokers:
                                 tier_multiplier = 1.5 if ante_num <= 3 else 1.0
-                                # Reduce the power of Green Joker relative to others to avoid over-reliance
-                                if item.item.name == "Green Joker" and joker_count_before >= 1:
-                                    tier_multiplier *= 0.7  # Reduce green joker's dominance
                                 base_reward += 20.0 * tier_multiplier
                                 
                             if joker_count_before < min_expected_jokers:
@@ -280,104 +264,81 @@ class BalatroEnv:
                                     base_reward += 4.0
                             
                             if ante_num >= 4:
-                                base_reward *= 1.2  # Reduced from 1.3
+                                base_reward *= 1.2
                                     
                             reward = base_reward
                             
-                        # ENHANCED TAROT REWARDS - IMPROVED IMPLEMENTATION
                         elif item.item_type == ShopItemType.TAROT:
                             item_name = item.item.name if hasattr(item.item, 'name') else "Tarot"
                             
-                            # MODIFIED: More balanced base reward
-                            base_reward = 15.0  # Reduced from 18.0
+                            base_reward = 15.0
                             
-                            # MODIFIED: Add balanced bonus for first tarot
                             if tarot_count == 0:
-                                base_reward *= 1.7  # Reduced from 2.0
+                                base_reward *= 1.7
                             
-                            # Bonus for specific powerful tarots - EXPANDED LIST
                             if hasattr(item.item, 'name'):
                                 if item.item.name in ["magician", "fool", "high priestess", "justice", "hermit", "judgement"]:
-                                    base_reward += 10.0  # Reduced from 12.0
+                                    base_reward += 10.0 
                                 elif item.item.name in ["hierophant", "chariot", "emperor"]:
-                                    base_reward += 6.0  # Reduced from 8.0
+                                    base_reward += 6.0 
                             
                             if ante_num >= 3:
-                                base_reward *= 1.2  # Reduced from 1.25
+                                base_reward *= 1.2
                                 
-                            # Add the tarot to pending_tarots for later use 
                             self.pending_tarots.append(item_name)
                                     
                             reward = base_reward
                             
-                        # BOOSTER REWARDS - MORE BALANCED FOR PACKS
                         elif item.item_type == ShopItemType.BOOSTER:
                             item_name = str(item.item) if hasattr(item, 'item') else "Booster"
                             
-                            # Base reward depends on ante and money available
                             money_ratio = self.game_manager.game.inventory.money / (price * 2)
                             
-                            # MODIFIED: Base reward scales with joker count and ante
-                            base_reward = 6.0 * min(money_ratio, 1.5)  # Reduced from 7.0
+                            base_reward = 6.0 * min(money_ratio, 1.5)
                             
-                            # Determine pack type and modify reward
                             pack_type = str(item.item).upper()
                             
-                            # Increased rewards for valuable pack types
                             if "BUFFOON" in pack_type:
-                                # Joker packs are very valuable
-                                base_reward *= 1.8  # Strong incentive for Buffoon packs
+                                base_reward *= 5.8
                                 
-                                # Even more valuable when we need jokers
                                 if joker_count_before < min_expected_jokers:
-                                    base_reward *= 1.4
+                                    base_reward *= 20.4
                             elif "ARCANA" in pack_type:
-                                # Tarot packs
-                                base_reward *= 1.4
+                                base_reward *= 4.4
                             elif "CELESTIAL" in pack_type:
-                                # Planet packs
-                                base_reward *= 1.3
+                                base_reward *= 5.3
                             
-                            # Extra reward for better packs
                             if "JUMBO" in pack_type or "MEGA" in pack_type:
-                                base_reward *= 1.5  # Reduced from 1.7
+                                base_reward *= 5.5  
                                 
-                            # MODIFIED: Encourage packs more when we have a decent joker base
                             if joker_count_before >= 3:
-                                base_reward *= 1.2  # Reduced from 1.3
+                                base_reward *= 1.2
                             elif joker_count_before < 1 and ante_num <= 3:
-                                base_reward *= 0.5  # Discourage packs before getting jokers
+                                base_reward *= 0.5
                             elif joker_count_before < 2 and ante_num <= 3:
-                                base_reward *= 0.7  # Modified from 0.6 - slightly less discouragement
+                                base_reward *= 0.7 
                                 
                             reward = base_reward
                     
-                    # Execute the purchase
                     success = self.current_shop.buy_item(slot, self.game_manager.game.inventory)
                     if success:
                         info['message'] = f"Bought {item_name} for ${price}"
                         print(f"Bought {item_name} for ${price}, reward: {reward}")
                         
-                        # ADDED: SPECIAL HANDLING FOR BOOSTER PACKS
                         if item.item_type == ShopItemType.BOOSTER:
-                            # Get pack contents
                             pack_contents = self.get_shop_item_contents(item)
                             if pack_contents:
-                                # Open the pack and handle the contents
                                 pack_type = str(item.item)
                                 result_message = self.handle_pack_opening(pack_type, pack_contents, 
                                                                         self.game_manager.game.inventory, 
                                                                         self.game_manager)
                                 info['message'] += f" {result_message}"
                         
-                        # ADDED: SPECIAL HANDLING FOR PLANETS
                         elif item.item_type == ShopItemType.PLANET:
-                            # Automatically use planets like in GameTest.py
                             if hasattr(item.item, 'planet_type'):
                                 planet_type = item.item.planet_type
                                 current_level = self.game_manager.game.inventory.planet_levels.get(planet_type, 1)
                                 
-                                # Find the planet in consumables and remove it
                                 planet_indices = self.game_manager.game.inventory.get_consumable_planet_indices()
                                 for idx in planet_indices:
                                     consumable = self.game_manager.game.inventory.consumables[idx]
@@ -386,78 +347,62 @@ class BalatroEnv:
                                         self.game_manager.game.inventory.remove_consumable(idx)
                                         break
                                 
-                                # Update planet level
                                 self.game_manager.game.inventory.planet_levels[planet_type] = current_level + 1
                                 info['message'] += f" Upgraded {item_name} to level {current_level + 1}"
                     else:
-                        reward = 0  # No reward if purchase fails
+                        reward = 0
                 else:
-                    # Less negative reward to avoid discouraging exploration
                     reward = -0.2
                     info['message'] = f"Not enough money to buy item (costs ${price})"
         
-        # SELL JOKER ACTIONS - Improved logic for strategic selling
         elif action < 9:  
             joker_idx = action - 4
             if joker_idx < len(self.game_manager.game.inventory.jokers):
                 joker = self.game_manager.game.inventory.jokers[joker_idx]
                 joker_name = joker.name if hasattr(joker, 'name') else "Unknown Joker"
                 
-                # IMPROVED SELLING STRATEGY
-                # Base reward is small but positive
                 reward = 0.5
                 
-                # Adjust based on joker quality and sell value
                 if hasattr(joker, 'sell_value'):
                     sell_value = joker.sell_value
                     
-                    # MODIFIED: Desperate selling - reward if money is very low
                     if self.game_manager.game.inventory.money < 2:
-                        # Higher reward for selling when desperate for money
-                        reward = 3.0  # Increased from 2.0 for more desperation selling
+                        reward = 3.0 
                     elif self.game_manager.game.inventory.money < 4 and ante_num >= 3:
-                        # Moderate reward for selling when money is tight in later antes
                         reward = 1.5
                     else:
-                        # MODIFIED: Stronger discouragement for selling valuable jokers
                         tier_penalty = 0.0
                         if sell_value >= 4:
-                            tier_penalty = -4.0  # Increased from -2.0
+                            tier_penalty = -4.0
                         elif sell_value >= 3:
-                            tier_penalty = -2.0  # Increased from -1.0
+                            tier_penalty = -2.0 
                             
                         reward += tier_penalty
                     
-                    # MODIFIED: Special case: too many jokers (6+ instead of 5+)
                     if len(self.game_manager.game.inventory.jokers) > 5:
-                        reward += 2.0  # Increased from 1.0 - good to make space
+                        reward += 2.0 
                         
-                        # Calculate the relative value vs other jokers
                         all_values = [j.sell_value for j in self.game_manager.game.inventory.jokers if hasattr(j, 'sell_value')]
                         if all_values:
                             avg_value = sum(all_values) / len(all_values)
-                            if sell_value < avg_value * 0.8:  # Clearly below average
-                                reward += 2.0  # Increased from 1.5 - good to sell below-average jokers
+                            if sell_value < avg_value * 0.8:
+                                reward += 2.0
                 
-                # MODIFIED: Don't sell specific key jokers except in dire circumstances
                 critical_jokers = ["Mr. Bones", "Green Joker", "Bootstraps", "Socks and Buskin", "The Duo", "8 Ball", "Rocket"]
                 if hasattr(joker, 'name') and joker.name in critical_jokers:
                     if self.game_manager.game.inventory.money >= 2:
-                        reward -= 4.0  # Increased from 3.0 - heavy penalty for selling key jokers with money
+                        reward -= 4.0 
                 
-                # ADDED: Discourage selling when below minimum expected jokers for the ante
                 if joker_count_before <= min_expected_jokers:
-                    reward -= 3.0  # Strong penalty for selling when we don't have enough jokers
+                    reward -= 3.0 
                 
-                # Execute the sell
                 sell_value = self.current_shop.sell_item("joker", joker_idx, self.game_manager.game.inventory)
                 if sell_value > 0:
                     info['message'] = f"Sold {joker_name} for ${sell_value}"
                     print(f"Sold {joker_name} for ${sell_value}, reward: {reward}")
                 else:
-                    reward = 0  # No reward if selling fails
+                    reward = 0
         
-        # TAROT CARD USAGE - More strategic approach
         elif action < 15:
             tarot_idx = (action - 9) // 3
             selection_strategy = (action - 9) % 3
@@ -468,107 +413,85 @@ class BalatroEnv:
                 tarot = self.game_manager.game.inventory.consumables[actual_idx].item
                 tarot_name = tarot.name if hasattr(tarot, 'name') else "Unknown Tarot"
                 
-                # Get card selection based on strategy
                 selected_indices = []
                 if selection_strategy > 0 and self.game_manager.current_hand:
-                    if selection_strategy == 1:  # Lowest cards
+                    if selection_strategy == 1:
                         cards_by_value = [(i, card.rank.value) for i, card in enumerate(self.game_manager.current_hand)]
                         cards_by_value.sort(key=lambda x: x[1])
                         selected_indices = [idx for idx, _ in cards_by_value[:3]]
-                    else:  # Highest cards
+                    else:
                         cards_by_value = [(i, card.rank.value) for i, card in enumerate(self.game_manager.current_hand)]
                         cards_by_value.sort(key=lambda x: x[1], reverse=True)
                         selected_indices = [idx for idx, _ in cards_by_value[:3]]
                 
                 success, message = self.game_manager.use_tarot(actual_idx, selected_indices)
                 if success:
-                    # MODIFIED: Reward for using tarot - balanced
-                    reward = 6.0  # Reduced from 7.0
+                    reward = 6.0 
                     
-                    # IMPROVED TAROT STRATEGY: Much better matching of tarots to strategies
                     if hasattr(tarot, 'name'):
-                        # Tarots that work best with high cards
                         if tarot.name in ["Magician", "Devil", "Sun", "Star"]:
                             if selection_strategy == 2:
-                                reward += 3.0  # Reduced from 4.0
+                                reward += 3.0
                             elif selection_strategy != 2:
-                                reward -= 1.5  # Reduced from 2.0
+                                reward -= 1.5
                                 
-                        # Tarots that work best with low cards
                         elif tarot.name in ["Tower", "Death", "Moon"]:
                             if selection_strategy == 1:
-                                reward += 3.0  # Reduced from 4.0
+                                reward += 3.0
                             elif selection_strategy != 1:
-                                reward -= 1.5  # Reduced from 2.0
+                                reward -= 1.5
                     
                     info['message'] = message
                     print(f"Used {tarot_name}: {message}, reward: {reward}")
         
-        # ADVANCE TO NEXT ANTE - Enhanced reward structure
         elif action == 15 and self.game_manager.current_ante_beaten:
-            # Calculate money efficiency
-            money_efficiency = min(1.0, money_before / 8.0)  # Cap at 1.0
+            money_efficiency = min(1.0, money_before / 8.0)
             money_penalty = 0.0
             
-            # MODIFIED: Penalty for having too much money
             if money_before > 12:
-                money_penalty = -3.0  # Reduced from -4.0
+                money_penalty = -3.0 
             elif money_before > 8:
-                money_penalty = -1.5  # Reduced from -2.0
+                money_penalty = -1.5 
             
-            # Base reward for advancing
             base_reward = 18.0
             
-            # Scale reward by the current ante (higher antes = higher rewards)
             ante_bonus = self.game_manager.game.current_ante * 3.0
             
-            # MODIFIED: More nuanced joker count bonus
             joker_count = len(self.game_manager.game.inventory.jokers)
             
-            # ADDED: Penalize for having too few jokers in later antes
             joker_deficit_penalty = 0.0
             if ante_num >= 3 and joker_count < min_expected_jokers:
-                joker_deficit_penalty = -8.0 * (min_expected_jokers - joker_count)  # Reduced from -10.0
+                joker_deficit_penalty = -8.0 * (min_expected_jokers - joker_count)
             
-            # MODIFIED: Adjust joker bonus based on diversity
             joker_bonus = joker_count * 3.0
             if joker_diversity <= 1 and ante_num >= 2:
-                # Penalty for relying on only one type of joker
-                joker_bonus *= 0.6  # Increased from 0.5 - less severe penalty
+                joker_bonus *= 0.6 
             elif joker_diversity <= 2 and ante_num >= 3:
-                # Moderate penalty for low diversity in later stages
-                joker_bonus *= 0.8  # Increased from 0.7 - less severe penalty
+                joker_bonus *= 0.8
             
-            # Add incentive for having saved SOME money
             money = self.game_manager.game.inventory.money
-            money_bonus = min(money / 8.0, 5.0)  # Cap at 5.0
+            money_bonus = min(money / 8.0, 5.0)
             
-            # ADDED: Bonus for having planets/tarots - Reduced
-            planets_tarots_bonus = (planet_count + tarot_count) * 1.5  # Reduced from 2.0
+            planets_tarots_bonus = (planet_count + tarot_count) * 1.5
             
-            # Calculate total reward with money efficiency factor
             reward = (base_reward + ante_bonus + joker_bonus + money_bonus + planets_tarots_bonus) * (0.8 + 0.2*money_efficiency) + money_penalty + joker_deficit_penalty
             
-            # Use pending tarots before advancing to next ante
             if self.pending_tarots and self.game_manager.current_hand:
                 self.use_pending_tarots()
             
-            # Execute the next ante action
             success = self.game_manager.next_ante()
             
             if success:
                 info['message'] = f"Advanced to Ante {self.game_manager.game.current_ante}"
                 print(f"Successfully advanced to Ante {self.game_manager.game.current_ante}, reward: {reward}")
                 
-                # Deal a new hand for the new ante
                 if not self.game_manager.current_hand:
                     self.game_manager.deal_new_hand()
             else:
-                reward = 0  # No reward if failed to advance
+                reward = 0
                 info['message'] = "Failed to advance to next ante"
                 print("Failed to advance to next ante")
         
-        # Return updated game state
         next_state = self._get_strategy_state()
         return next_state, reward, done, info
 
@@ -604,7 +527,6 @@ class BalatroEnv:
             list: The contents of the pack
         """
         try:
-            # Try to find pack_type in PackType enum
             pack_enum = None
             for pt in PackType:
                 if pt.value == pack_type:
@@ -618,7 +540,6 @@ class BalatroEnv:
             from Shop import AnteShops
             ante_shops = AnteShops()
             
-            # Search through all ante shops for matching pack
             for ante_num in range(1, 9):
                 if ante_num not in ante_shops.ante_shops:
                     continue
@@ -677,7 +598,6 @@ class BalatroEnv:
         
         if "STANDARD" in pack_type.upper():
             for i in range(min(num_to_select, len(pack_contents))):
-                # Simple AI: randomly select a card from the pack
                 selected_idx = random.randint(0, len(pack_contents) - 1)
                 
                 try:
@@ -689,7 +609,6 @@ class BalatroEnv:
                         print(f"WARNING: Empty card string")
                         continue
                     
-                    # Map strings to proper Rank enums
                     rank_map = {
                         "A": Rank.ACE, 
                         "2": Rank.TWO,
@@ -706,7 +625,6 @@ class BalatroEnv:
                         "K": Rank.KING
                     }
                     
-                    # Map strings to proper Suit enums
                     suit_map = {
                         "heart": Suit.HEARTS, 
                         "hearts": Suit.HEARTS, 
@@ -722,7 +640,6 @@ class BalatroEnv:
                         "♠": Suit.SPADES
                     }
                     
-                    # Get rank from first part of string
                     rank_str = parts[0]
                     rank = rank_map.get(rank_str)
                     
@@ -740,23 +657,18 @@ class BalatroEnv:
                             print(f"WARNING: Invalid rank '{rank_str}', defaulting to ACE")
                             rank = Rank.ACE
 
-                    # Get suit from last part of string
                     suit_str = parts[-1].lower() if len(parts) > 1 else "hearts"
                     suit = suit_map.get(suit_str, Suit.HEARTS)
                     if suit_str not in suit_map:
                         print(f"WARNING: Invalid suit '{suit_str}', defaulting to HEARTS")
                     
-                    # Create card with proper Suit and Rank enums
                     if not isinstance(rank, Rank) or not isinstance(suit, Suit):
                         print(f"ERROR: Invalid rank or suit type - rank: {type(rank)}, suit: {type(suit)}")
                         continue
                         
                     card = Card(suit, rank)
-                    
-                    # Debug print
                     print(f"Created card: {card}, rank type: {type(card.rank)}, suit type: {type(card.suit)}")
                     
-                    # Apply enhancement if specified
                     enhancement_map = {
                         "foil": CardEnhancement.FOIL,
                         "holo": CardEnhancement.HOLO,
@@ -769,8 +681,8 @@ class BalatroEnv:
                         "lucky": CardEnhancement.LUCKY,
                         "mult": CardEnhancement.MULT,
                         "bonus": CardEnhancement.BONUS,
-                        "blue": None,  # "blue stamp" is handled specially
-                        "stamp": None  # Part of "blue stamp" or similar
+                        "blue": None,
+                        "stamp": None
                     }
                     
                     for part in parts[1:-1]:
@@ -778,10 +690,8 @@ class BalatroEnv:
                         if part_lower in enhancement_map and enhancement_map[part_lower] is not None:
                             card.enhancement = enhancement_map[part_lower]
                         elif part_lower == "blue" and "stamp" in [p.lower() for p in parts[1:-1]]:
-                            # Handle special case for "blue stamp"
                             card.enhancement = CardEnhancement.FOIL
                     
-                    # Validate card before adding
                     if hasattr(card, 'rank') and hasattr(card, 'suit') and isinstance(card.rank, Rank) and isinstance(card.suit, Suit):
                         inventory.add_card_to_deck(card)
                         message += f"Added {card_string} to deck. "
@@ -796,7 +706,6 @@ class BalatroEnv:
                     message += f"Failed to add card: {e}. "
         
         elif "CELESTIAL" in pack_type.upper():
-            # Handle Celestial packs (planets)
             for i in range(min(num_to_select, len(pack_contents))):
                 selected_idx = random.randint(0, len(pack_contents) - 1)
                 planet_name = pack_contents[selected_idx]
@@ -819,7 +728,8 @@ class BalatroEnv:
                     message += f"Failed to upgrade planet: {e}. "
         
         elif "ARCANA" in pack_type.upper():
-            # Handle Arcana packs (tarots)
+            selected_tarots = []
+            
             for i in range(min(num_to_select, len(pack_contents))):
                 selected_idx = random.randint(0, len(pack_contents) - 1)
                 tarot_name = pack_contents[selected_idx]
@@ -828,12 +738,12 @@ class BalatroEnv:
                     from Tarot import create_tarot_by_name
                     tarot = create_tarot_by_name(tarot_name)
                     if tarot:
-                        # Add tarot to inventory
                         inventory.add_consumable(tarot)
                         message += f"Added {tarot_name} tarot to inventory. "
                         print(f"Added {tarot_name} tarot to inventory")
                         
-                        # Also add to pending_tarots for later use
+                        selected_tarots.append(tarot_name)
+                        
                         self.pending_tarots.append(tarot_name)
                     else:
                         message += f"Failed to create tarot {tarot_name}. "
@@ -841,9 +751,24 @@ class BalatroEnv:
                 except Exception as e:
                     print(f"Error processing tarot: {e}")
                     message += f"Failed to add tarot: {e}. "
+            
+            if selected_tarots and self.game_manager.current_hand:
+                if "MEGA" not in pack_type.upper() and len(selected_tarots) > 0:
+                    result = self.use_specific_tarot(selected_tarots[0])
+                    if result:
+                        message += f"Immediately used {selected_tarots[0]} tarot. "
+                        if selected_tarots[0] in self.pending_tarots:
+                            self.pending_tarots.remove(selected_tarots[0])
+                
+                elif "MEGA" in pack_type.upper() and len(selected_tarots) >= 2:
+                    for i in range(min(2, len(selected_tarots))):
+                        result = self.use_specific_tarot(selected_tarots[i])
+                        if result:
+                            message += f"Immediately used {selected_tarots[i]} tarot. "
+                            if selected_tarots[i] in self.pending_tarots:
+                                self.pending_tarots.remove(selected_tarots[i])
         
         elif "BUFFOON" in pack_type.upper():
-            # Handle Buffoon packs (jokers)
             for i in range(min(num_to_select, len(pack_contents))):
                 selected_idx = random.randint(0, len(pack_contents) - 1)
                 joker_name = pack_contents[selected_idx]
@@ -868,21 +793,83 @@ class BalatroEnv:
         
         return message
     
+
+    def use_specific_tarot(self, tarot_name):
+        """
+        Use a specific tarot card by name
+        
+        Args:
+            tarot_name (str): Name of the tarot to use
+            
+        Returns:
+            bool: True if tarot was used successfully, False otherwise
+        """
+        tarot_indices = self.game_manager.game.inventory.get_consumable_tarot_indices()
+        tarot_index = None
+        
+        for idx in tarot_indices:
+            consumable = self.game_manager.game.inventory.consumables[idx]
+            if hasattr(consumable.item, 'name') and consumable.item.name.lower() == tarot_name.lower():
+                tarot_index = idx
+                break
+        
+        if tarot_index is None:
+            print(f"Could not find tarot {tarot_name} in inventory")
+            return False
+            
+        tarot = self.game_manager.game.inventory.consumables[tarot_index].item
+        cards_required = tarot.selected_cards_required if hasattr(tarot, 'selected_cards_required') else 0
+        
+        if cards_required > len(self.game_manager.current_hand):
+            print(f"Not enough cards to use {tarot_name}, needs {cards_required}")
+            return False
+            
+        selected_indices = []
+        
+        if cards_required > 0:
+            if hasattr(tarot, 'name'):
+                tarot_lower = tarot.name.lower()
+                
+                if any(keyword in tarot_lower for keyword in ["magician", "devil", "sun", "star"]):
+                    card_values = [(i, card.rank.value) for i, card in enumerate(self.game_manager.current_hand)]
+                    card_values.sort(key=lambda x: x[1], reverse=True)
+                    selected_indices = [idx for idx, _ in card_values[:cards_required]]
+                
+                elif any(keyword in tarot_lower for keyword in ["tower", "death", "moon"]):
+                    card_values = [(i, card.rank.value) for i, card in enumerate(self.game_manager.current_hand)]
+                    card_values.sort(key=lambda x: x[1])
+                    selected_indices = [idx for idx, _ in card_values[:cards_required]]
+                
+                else:
+                    all_indices = list(range(len(self.game_manager.current_hand)))
+                    random.shuffle(all_indices)
+                    selected_indices = all_indices[:cards_required]
+            else:
+                card_values = [(i, card.rank.value) for i, card in enumerate(self.game_manager.current_hand)]
+                card_values.sort(key=lambda x: x[1])
+                selected_indices = [idx for idx, _ in card_values[:cards_required]]
+        
+        success, message = self.game_manager.use_tarot(tarot_index, selected_indices)
+        if success:
+            print(f"Used {tarot_name}: {message}")
+            return True
+        else:
+            print(f"Failed to use {tarot_name}: {message}")
+            return False
+
+
     def step_play(self, action):
         """Process a playing action with stricter enforcement of rules"""
         self.episode_step += 1
         
-        # Check if we've reached a failed state (max hands played, not enough score, no reset)
         if (self.game_manager.hands_played >= self.game_manager.max_hands_per_round and 
             self.game_manager.current_score < self.game_manager.game.current_blind and 
             not self.game_manager.current_ante_beaten):
             
-            # Set game over to true - we've failed this ante
             print(f"\n***** GAME OVER: Failed to beat the ante *****")
             print(f"Score: {self.game_manager.current_score}/{self.game_manager.game.current_blind}")
             print(f"Max hands played: {self.game_manager.hands_played}/{self.game_manager.max_hands_per_round}")
             
-            # In GameTest.py, this is handled by checking for Mr. Bones joker first
             mr_bones_index = None
             for i, joker in enumerate(self.game_manager.game.inventory.jokers):
                 if joker.name == "Mr. Bones":
@@ -890,16 +877,13 @@ class BalatroEnv:
                     break
                     
             if mr_bones_index is not None and self.game_manager.current_score >= (self.game_manager.game.current_blind * 0.25):
-                # Mr. Bones saves the game but gets removed
                 self.game_manager.current_ante_beaten = True
                 removed_joker = self.game_manager.game.inventory.remove_joker(mr_bones_index)
                 print(f"Mr. Bones saved you and vanished!")
                 
-                # Now go to shop phase
                 next_state = self._get_play_state()
                 return next_state, 0.5, False, {"message": "Mr. Bones saved you!", "shop_phase": True}
             else:
-                # Game over
                 self.game_manager.game_over = True
                 next_state = self._get_play_state()
                 return next_state, -65.0, True, {"message": "GAME OVER: Failed to beat the ante"}
@@ -1003,7 +987,7 @@ class BalatroEnv:
                     suit_features[3] = 1.0
                 state_features.extend(suit_features)
                 
-                enhancement_value = float(card.enhancement.value) / 12.0  # Normalize
+                enhancement_value = float(card.enhancement.value) / 12.0
                 state_features.append(enhancement_value)
                 
                 state_features.append(1.0 if card.face else 0.0)
@@ -1059,103 +1043,80 @@ class BalatroEnv:
         return np.array(state_features, dtype=np.float32)
     
     def _define_play_action_space(self):
-        # 0 or 1 (play vs discard)
-        # 2^8 possible actions
         return 512 
 
     def _define_strategy_action_space(self):
-        # Buy item from shop 4 slots
-        # Sell joker up to 5
-        # Use tarot at most 8 card selection
-        # skip
         return 26
     
     def _calculate_play_reward(self):
         """Drastically improved reward calculation with ante-specific adjustments"""
-        # Current ante - critical for appropriate scaling
         current_ante = self.game_manager.game.current_ante
         
-        # Base score progress - scales with current blind
         score_progress = min(1.0, self.game_manager.current_score / self.game_manager.game.current_blind)
         
-        # PROGRESSIVE REWARD SCALING: Much higher rewards for early game progress
-        ante_factor = max(1.0, 4.0 / current_ante)  # Higher factor for lower antes
+        ante_factor = max(1.0, 4.0 / current_ante)
         progress_reward = score_progress * 10.0 * ante_factor
         
-        # HUGE bonus for beating the blind
         if self.game_manager.current_ante_beaten:
             progress_reward += 25.0
         
-        # Smarter hand quality rewards - EARLY GAME vs LATE GAME
         hand_quality_reward = 0
         if self.game_manager.hand_result:
-            # For early game (ante 1-3): Be more forgiving of simple hands
             if current_ante <= 3:
                 early_hand_map = {
-                    HandType.HIGH_CARD: 0.0,  # No longer penalized in early game
-                    HandType.PAIR: 1.0,       # Small positive reward in early game
-                    HandType.TWO_PAIR: 4.0,   # Better reward
-                    HandType.THREE_OF_A_KIND: 8.0,
-                    HandType.STRAIGHT: 12.0,
-                    HandType.FLUSH: 12.0,
-                    HandType.FULL_HOUSE: 20.0,
-                    HandType.FOUR_OF_A_KIND: 30.0,
-                    HandType.STRAIGHT_FLUSH: 50.0
+                    HandType.HIGH_CARD: 0.0,
+                    HandType.PAIR: 1.0,
+                    HandType.TWO_PAIR: 25.0,
+                    HandType.THREE_OF_A_KIND: 30.0,
+                    HandType.STRAIGHT: 75.0,
+                    HandType.FLUSH: 75.0,
+                    HandType.FULL_HOUSE: 75.0,
+                    HandType.FOUR_OF_A_KIND: 100.0,
+                    HandType.STRAIGHT_FLUSH: 150.0
                 }
                 hand_quality_reward = early_hand_map.get(self.game_manager.hand_result, 0.5)
             else:
-                # For later game (ante 4+): Expect better hands
                 late_hand_map = {
                     HandType.HIGH_CARD: -1.0,
                     HandType.PAIR: 0.0,
-                    HandType.TWO_PAIR: 3.0,
-                    HandType.THREE_OF_A_KIND: 7.0,
-                    HandType.STRAIGHT: 12.0,
-                    HandType.FLUSH: 12.0,
-                    HandType.FULL_HOUSE: 18.0,
-                    HandType.FOUR_OF_A_KIND: 30.0,
-                    HandType.STRAIGHT_FLUSH: 45.0
+                    HandType.TWO_PAIR: 20.0,
+                    HandType.THREE_OF_A_KIND: 20.0,
+                    HandType.STRAIGHT: 45.0,
+                    HandType.FLUSH: 45.0,
+                    HandType.FULL_HOUSE: 45.0,
+                    HandType.FOUR_OF_A_KIND: 50.0,
+                    HandType.STRAIGHT_FLUSH: 90.0
                 }
                 hand_quality_reward = late_hand_map.get(self.game_manager.hand_result, 0.5)
         
-        # Bigger incentive for playing real poker hands (5+ cards)
         cards_played = len(self.game_manager.played_cards)
         if cards_played >= 5:
-            cards_bonus = 4.0 + (cards_played - 5)  # Bigger bonus for more cards
+            cards_bonus = 4.0 + (cards_played - 5)
         else:
             cards_bonus = 0.5 * cards_played
         
-        # IMPROVED DISCARD STRATEGY: Reward for strategic discarding
         discard_bonus = 0
         if hasattr(self, 'last_action_was_discard') and self.last_action_was_discard:
-            # Ante-specific discard strategy
             if current_ante <= 3:
-                discard_bonus = 1.0  # Small bonus for any discard in early game
+                discard_bonus = 1.0  
             else:
-                # In late game, only reward discard if we have no good hand
                 if not self.game_manager.hand_result or self.game_manager.hand_result.value <= HandType.PAIR.value:
                     discard_bonus = 2.0
         
-        # Strong penalty for game over - scaled by ante
         game_over_penalty = 0
         if self.game_manager.game_over:
             base_penalty = -30.0
-            # Make penalty more severe for early game loss
             ante_multiplier = max(1.0, 5.0 / current_ante)
             game_over_penalty = base_penalty * ante_multiplier
         
-        # IMPROVED REWARD AGGREGATION: Better balance between components
         total_reward = progress_reward + hand_quality_reward + cards_bonus + discard_bonus + game_over_penalty
         
-        # Special cases - excellent hand multipliers
         if self.game_manager.hand_result and self.game_manager.hand_result.value >= HandType.FULL_HOUSE.value:
-            # Even stronger multiplier for excellent hands in later rounds
             multiplier = 1.5 if current_ante <= 3 else 2.0
             total_reward *= multiplier
         
-        # First round special case - boost rewards to encourage success
         if current_ante == 1:
-            total_reward *= 1.3  # 30% bonus to all rewards in first ante
+            total_reward *= 1.3  
         
         return total_reward
     
@@ -1195,17 +1156,13 @@ class BalatroEnv:
     def _encode_cards(self, cards):
         encoded = []
         for card in cards:
-            # Normalize rank (2-14) -> 0-1
             rank_feature = (card.rank.value - 2) / 12
             
-            # One-hot encode suit
             suit_features = [0, 0, 0, 0]
             suit_features[card.suit.value - 1] = 1
             
-            # Enhancement feature
             enhancement_feature = card.enhancement.value / len(CardEnhancement)
             
-            # Additional state data
             is_scored = 1.0 if card.scored else 0.0
             is_face = 1.0 if card.face else 0.0
             is_debuffed = 1.0 if hasattr(card, 'debuffed') and card.debuffed else 0.0
@@ -1213,17 +1170,15 @@ class BalatroEnv:
             card_features = [rank_feature] + suit_features + [enhancement_feature, is_scored, is_face, is_debuffed]
             encoded.extend(card_features)
         
-        # Pad to fixed length if needed
         return np.array(encoded)
 
 
     def _encode_boss_blind_effect(self):
         """Encode the boss blind effect as a feature vector."""
-        # One-hot encode the boss blind effect
-        encoded = [0] * (len(BossBlindEffect) + 1)  # +1 for "no effect"
+        encoded = [0] * (len(BossBlindEffect) + 1)
         
         if not self.game_manager.game.is_boss_blind:
-            encoded[0] = 1  # No effect
+            encoded[0] = 1
         else:
             effect_value = self.game_manager.game.active_boss_blind_effect.value
             encoded[effect_value] = 1
@@ -1232,10 +1187,8 @@ class BalatroEnv:
 
     def _encode_joker_effects(self):
         """Encode joker effects as a feature vector."""
-        # This is a simplified encoding - you may want more detailed features
         joker_count = len(self.game_manager.game.inventory.jokers)
         
-        # Track special jokers that have important effects
         has_mr_bones = 0
         has_green_joker = 0
         has_socks_buskin = 0
@@ -1270,7 +1223,6 @@ class BalatroEnv:
         encoded = []
         
         for joker in jokers:
-            # Rarity encoding
             rarity_feature = 0.0
             if joker.rarity == 'base':
                 rarity_feature = 0.33
@@ -1279,7 +1231,6 @@ class BalatroEnv:
             elif joker.rarity == 'rare':
                 rarity_feature = 1.0
             
-            # Sell value (normalized)
             sell_value = joker.sell_value / 5.0
             
             has_mult_effect = 1.0 if joker.mult_effect > 0 else 0.0
@@ -1322,12 +1273,10 @@ class BalatroEnv:
             
             is_planet = 1.0 if consumable.type == ConsumableType.PLANET else 0.0
             
-            # Cards required (normalized)
             cards_required = 0.0
             if consumable.type == ConsumableType.TAROT and hasattr(consumable.item, 'selected_cards_required'):
                 cards_required = consumable.item.selected_cards_required / 3.0
             
-            # Basic effects (simplified)
             affects_cards = 0.0
             affects_money = 0.0
             affects_game = 0.0
@@ -1335,7 +1284,6 @@ class BalatroEnv:
             if consumable.type == ConsumableType.TAROT:
                 tarot_type = consumable.item.tarot_type
                 
-                # Determine effect type based on tarot
                 if tarot_type in [TarotType.THE_MAGICIAN, TarotType.THE_EMPRESS, 
                                 TarotType.THE_HIEROPHANT, TarotType.THE_LOVERS,
                                 TarotType.THE_CHARIOT, TarotType.JUSTICE, 
@@ -1354,14 +1302,13 @@ class BalatroEnv:
                     affects_game = 1.0
             
             elif consumable.type == ConsumableType.PLANET:
-                affects_game = 1.0  # All planets affect the game scoring
+                affects_game = 1.0
             
             consumable_features = [is_planet, cards_required, affects_cards, 
                                 affects_money, affects_game]
             
             encoded.extend(consumable_features)
         
-        # Pad with zeros if fewer than max consumables
         padding_needed = max_consumables - len(self.game_manager.game.inventory.consumables)
         if padding_needed > 0:
             encoded.extend([0.0] * (padding_needed * features_per_consumable))
@@ -1375,17 +1322,12 @@ class BalatroEnv:
         Returns:
             numpy array of encoded shop item features
         """
-        # Assuming shop is accessible through game_manager
-        # If not, you'll need to adjust this based on your code structure
-        # For example, you might need a self.shop attribute
-        
-        # For the purpose of this code, I'll assume a shop exists and has items
-        max_shop_items = 4  # Standard shop size
-        features_per_item = 6  # Number of features per shop item
+
+        max_shop_items = 4 
+        features_per_item = 6 
         
         encoded = []
         
-        # Check if we have a shop reference
         shop = None
         if hasattr(self, 'shop'):
             shop = self.shop
@@ -1393,14 +1335,11 @@ class BalatroEnv:
             shop = self.game_manager.shop
         
         if shop is None:
-            # No shop reference, return zeros
             return np.zeros(max_shop_items * features_per_item)
         
         for i in range(max_shop_items):
-            # Check if slot has an item
             has_item = 1.0 if i < len(shop.items) and shop.items[i] is not None else 0.0
             
-            # Default values
             item_type = 0.0
             price = 0.0
             can_afford = 0.0
@@ -1410,14 +1349,11 @@ class BalatroEnv:
             if has_item:
                 shop_item = shop.items[i]
                 
-                # Item type (normalized)
                 item_type = shop_item.item_type.value / len(ShopItemType)
                 
-                # Price and affordability
-                price = shop.get_item_price(i) / 10.0  # Normalize (assume max price 10)
+                price = shop.get_item_price(i) / 10.0
                 can_afford = 1.0 if self.game_manager.game.inventory.money >= price else 0.0
                 
-                # Item category
                 is_joker = 1.0 if shop_item.item_type == ShopItemType.JOKER else 0.0
                 is_consumable = 1.0 if shop_item.item_type in [ShopItemType.TAROT, ShopItemType.PLANET] else 0.0
             
@@ -1433,33 +1369,35 @@ class BalatroEnv:
         Returns:
             numpy array of encoded planet level features
         """
-        # Get planet levels
         encoded = []
         
-        # Process each planet type
         for planet_type in PlanetType:
-            # Get current level
             level = self.game_manager.game.inventory.planet_levels.get(planet_type, 1)
             
-            # Normalize
-            normalized_level = (level - 1) / 9.0  # Assuming max level is 10
+            normalized_level = (level - 1) / 9.0
             
             encoded.append(normalized_level)
         
         return np.array(encoded)
     
 
-    def use_pending_tarots(self):
+    def use_pending_tarots(self, limit=None):
         """
         Use tarot cards that were purchased from the shop
+        
+        Args:
+            limit (int, optional): Maximum number of tarots to use
         """
         if not self.pending_tarots:
             return False
         
         print("\n=== Using Tarot Cards From Shop ===")
         used_any = False
+        used_count = 0
         
         for tarot_name in self.pending_tarots.copy():
+            if limit is not None and used_count >= limit:
+                break
             tarot_indices = self.game_manager.game.inventory.get_consumable_tarot_indices()
             tarot_index = None
             
@@ -1503,29 +1441,23 @@ class BalatroEnv:
         """Return valid play actions with proper handling for end-of-round cases"""
         valid_actions = []
         
-        # Check if we're in a terminal state (max hands played, not enough score)
         hands_limit_reached = self.game_manager.hands_played >= self.game_manager.max_hands_per_round
         ante_beaten = self.game_manager.current_ante_beaten
         
-        # If we've reached max hands but haven't beaten the ante, no valid actions
-        # (this gets handled by the step_play method to set game_over=True)
+
         if hands_limit_reached and not ante_beaten:
             print("No valid actions: max hands played and ante not beaten")
-            # Return a dummy action (play all cards) so the agent has something to do
-            # The step_play method will handle this as a game over state
+
             all_cards_action = (1 << len(self.game_manager.current_hand)) - 1
             return [all_cards_action]
         
-        # If we can still play hands this round
         if not hands_limit_reached:
-            # First, check if we have any good poker hands available
             best_hand_info = self.game_manager.get_best_hand_from_current()
             
             if best_hand_info:
                 best_hand, best_cards = best_hand_info
                 
-                # Convert the best hand to an action
-                if best_hand.value >= HandType.PAIR.value:  # It's a decent hand
+                if best_hand.value >= HandType.PAIR.value:
                     recommended_indices = []
                     for card in best_cards:
                         for i, hand_card in enumerate(self.game_manager.current_hand):
@@ -1535,31 +1467,24 @@ class BalatroEnv:
                                 recommended_indices.append(i)
                                 break
                     
-                    # Convert indices to action number
                     if recommended_indices:
                         action = self._indices_to_action(recommended_indices, is_discard=False)
                         valid_actions.append(action)
                         
-                        # Add this as the first action, with higher probability of being chosen
-                        for _ in range(3):  # Add multiple times to increase probability
+                        for _ in range(3):
                             valid_actions.append(action)
             
-            # Add all possible play actions
             for i in range(min(256, 2**len(self.game_manager.current_hand))):
                 if self._is_valid_play_action(i):
-                    valid_actions.append(i)  # Play action
+                    valid_actions.append(i)
         
-        # If we can still discard cards
         if self.game_manager.discards_used < self.game_manager.max_discards_per_round:
-            # Only add discard actions if we have a poor hand
             best_hand_info = self.game_manager.get_best_hand_from_current()
             if not best_hand_info or best_hand_info[0].value <= HandType.PAIR.value:
-                # Actions to discard cards
                 for i in range(min(256, 2**len(self.game_manager.current_hand))):
                     if self._is_valid_discard_action(i):
-                        valid_actions.append(i + 256)  # Discard action
+                        valid_actions.append(i + 256)
         
-        # If no valid actions found (shouldn't normally happen)
         if not valid_actions and len(self.game_manager.current_hand) > 0:
             print("Warning: No valid actions found with cards in hand. Defaulting to play all.")
             all_cards_action = (1 << len(self.game_manager.current_hand)) - 1
@@ -1569,13 +1494,11 @@ class BalatroEnv:
 
     def _is_valid_play_action(self, action):
         """Check if a play action is valid (has at least one card selected)"""
-        # Prevent empty plays
         card_indices = self._convert_action_to_card_indices(action)
         
         if len(card_indices) == 0:
             return False
         
-        # Check if we've already reached max hands
         if self.game_manager.hands_played >= self.game_manager.max_hands_per_round:
             return False
         
@@ -1583,13 +1506,11 @@ class BalatroEnv:
 
     def _is_valid_discard_action(self, action):
         """Check if a discard action is valid (has at least one card selected)"""
-        # Prevent empty discards
         card_indices = self._convert_action_to_card_indices(action)
         
         if len(card_indices) == 0:
             return False
         
-        # Check if we've already used max discards
         if self.game_manager.discards_used >= self.game_manager.max_discards_per_round:
             return False
         
@@ -1610,13 +1531,11 @@ class BalatroEnv:
         """Return valid strategy actions based on current game state with better prioritization"""
         valid_actions = []
         
-        # Create shop if it doesn't exist yet
         if not hasattr(self, 'current_shop') or self.current_shop is None:
             self.update_shop()
         
-        # First priority: Buy affordable jokers
         joker_slots = []
-        for i in range(4):  # 4 shop slots
+        for i in range(4):
             if i < len(self.current_shop.items) and self.current_shop.items[i] is not None:
                 item = self.current_shop.items[i]
                 if (hasattr(item, 'item_type') and 
@@ -1624,7 +1543,6 @@ class BalatroEnv:
                     self.game_manager.game.inventory.money >= self.current_shop.get_item_price(i)):
                     joker_slots.append(i)
         
-        # Second priority: Buy affordable planets
         planet_slots = []
         for i in range(4):
             if i < len(self.current_shop.items) and self.current_shop.items[i] is not None:
@@ -1634,7 +1552,6 @@ class BalatroEnv:
                     self.game_manager.game.inventory.money >= self.current_shop.get_item_price(i)):
                     planet_slots.append(i)
         
-        # Third priority: Buy affordable tarots
         tarot_slots = []
         for i in range(4):
             if i < len(self.current_shop.items) and self.current_shop.items[i] is not None:
@@ -1644,7 +1561,6 @@ class BalatroEnv:
                     self.game_manager.game.inventory.money >= self.current_shop.get_item_price(i)):
                     tarot_slots.append(i)
         
-        # Fourth priority: Buy affordable boosters
         booster_slots = []
         for i in range(4):
             if i < len(self.current_shop.items) and self.current_shop.items[i] is not None:
@@ -1654,35 +1570,28 @@ class BalatroEnv:
                     self.game_manager.game.inventory.money >= self.current_shop.get_item_price(i)):
                     booster_slots.append(i)
         
-        # Add all shopping actions in priority order
         valid_actions.extend(joker_slots)
         valid_actions.extend(planet_slots)
         valid_actions.extend(tarot_slots)
         valid_actions.extend(booster_slots)
         
-        # Check if we can sell jokers (if we have too many or need money)
         joker_count = len(self.game_manager.game.inventory.jokers)
         if joker_count > 0:
-            # Consider selling jokers if we have 4+ or if we're low on money
             if joker_count >= 4 or self.game_manager.game.inventory.money <= 1:
                 for i in range(min(joker_count, 5)):
-                    # Action to sell joker
                     valid_actions.append(i + 4)
         
-        # Check if we can use tarot cards
         tarot_indices = self.game_manager.game.inventory.get_consumable_tarot_indices()
         for i, tarot_idx in enumerate(tarot_indices):
-            if i < 2:  # Limit to first 2 tarots for simplicity
-                valid_actions.append(9 + i*3)  # Use tarot with no cards
-                valid_actions.append(10 + i*3)  # Use tarot with lowest cards
-                valid_actions.append(11 + i*3)  # Use tarot with highest cards
+            if i < 2: 
+                valid_actions.append(9 + i*3) 
+                valid_actions.append(10 + i*3)  
+                valid_actions.append(11 + i*3)  
         
-        # Add the skip action (advance to next ante)
-        # Only add this if we've beaten the ante
+
         if self.game_manager.current_ante_beaten:
-            valid_actions.append(15)  # Skip action
+            valid_actions.append(15)
         
-        # If no valid actions, can always skip
         if not valid_actions:
             valid_actions.append(15)
         
@@ -1698,16 +1607,12 @@ class BalatroEnv:
         Returns:
             List of card indices to play/discard
         """
-        # First determine if this is a play or discard action (first bit)
-        action_type = action // 256  # For 8 cards, we have 2^8=256 possible combinations
+        action_type = action // 256
         
-        # Get the card selection part of the action
         card_mask = action % 256
         
-        # Convert to binary representation to determine which cards to select
-        binary = format(card_mask, '08b')  # 8-bit binary representation
+        binary = format(card_mask, '08b')
         
-        # Select cards where the corresponding bit is 1
         card_indices = [i for i, bit in enumerate(reversed(binary)) if bit == '1']
         
         return card_indices
@@ -1732,21 +1637,19 @@ class PlayingAgent:
         self.state_size = state_size
         self.action_size = action_size
         self.memory = deque(maxlen=5000)
-        self.gamma = 0.95                  # Discount factor
-        self.epsilon = 1.0                 # Exploration rate
-        self.epsilon_min = 0.01            # Minimum exploration probability
-        self.epsilon_decay = 0.995         # Decay rate for exploration
+        self.gamma = 0.95                  
+        self.epsilon = 1.0                 
+        self.epsilon_min = 0.01            
+        self.epsilon_decay = 0.995         
         self.learning_rate = learning_rate
         self.model = self._build_model()
         self.target_model = self._build_model()
         self.update_target_model()
         
-        # For tracking performance metrics
         self.recent_rewards = deque(maxlen=100)
-        self.recent_hands = deque(maxlen=100)  # Track hand types played
-        self.recent_discards = deque(maxlen=100)  # Track discard frequencies
+        self.recent_hands = deque(maxlen=100) 
+        self.recent_discards = deque(maxlen=100) 
         
-        # Action categories
         self.PLAY_ACTION = 0
         self.DISCARD_ACTION = 1
         
@@ -1754,22 +1657,17 @@ class PlayingAgent:
         """Build a more sophisticated neural network for predicting Q-values"""
         model = Sequential()
         
-        # First layer with more units
         model.add(Dense(256, input_dim=self.state_size, activation='relu'))
         model.add(Dropout(0.2))
         
-        # Add an intermediate layer
         model.add(Dense(256, activation='relu'))
         model.add(Dropout(0.2))
         
-        # Add another intermediate layer
         model.add(Dense(128, activation='relu'))
         model.add(Dropout(0.1))
         
-        # Output layer
         model.add(Dense(self.action_size, activation='linear'))
         
-        # Use a lower learning rate
         model.compile(loss='mse', optimizer=Adam(learning_rate=0.0005))
         return model
     
@@ -1781,28 +1679,23 @@ class PlayingAgent:
         """Store experience in replay memory"""
         self.memory.append((state, action, reward, next_state, done))
         
-        # Track rewards for analytics
         self.recent_rewards.append(reward)
         
     def act(self, state, valid_actions=None):
         """Choose an action with robust input validation"""
-        # Validate and fix input state
         if not isinstance(state, np.ndarray):
             state = np.array(state, dtype=np.float32)
             
         if len(state.shape) == 1:
             state = state.reshape(1, -1)
         
-        # Check state dimensions
         if state.shape[1] != self.state_size:
             print(f"WARNING: Play agent received incorrect state size. Expected {self.state_size}, got {state.shape[1]}")
             if state.shape[1] < self.state_size:
-                # Pad with zeros
                 padded_state = np.zeros((1, self.state_size), dtype=np.float32)
                 padded_state[0, :state.shape[1]] = state[0, :]
                 state = padded_state
             else:
-                # Truncate
                 state = state[:, :self.state_size]
         
         if np.random.rand() <= self.epsilon:
@@ -1822,14 +1715,11 @@ class PlayingAgent:
     
     def decode_action(self, action):
         """Decode an action into play/discard and card indices"""
-        # First bit determines if this is a play or discard action
-        action_type = action // 256  # For 8 cards, we have 2^8=256 possible combinations
+        action_type = action // 256
         
-        # Remaining bits determine which cards to select
         card_mask = action % 256
         
-        # Convert to binary representation
-        binary = format(card_mask, '08b')  # 8-bit binary representation
+        binary = format(card_mask, '08b') 
         card_indices = [i for i, bit in enumerate(reversed(binary)) if bit == '1']
         
         action_name = "Discard" if action_type == self.DISCARD_ACTION else "Play"
@@ -1840,23 +1730,37 @@ class PlayingAgent:
         if len(self.memory) < batch_size:
             return
         
-        # Prioritize experiences that led to significant rewards
         priorities = []
-        for _, _, reward, _, _ in self.memory:
-            # Prioritize experiences with large positive or negative rewards
-            priority = abs(reward) + 0.1  # Small base priority for all experiences
+        for state, action, reward, next_state, done in self.memory:
+            priority = abs(reward) + 0.1 
+            
+            if reward > 20: 
+                priority *= 4.0 
+            elif reward > 10:  
+                priority *= 2.0
+                
             priorities.append(priority)
         
-        # Normalize priorities
-        priorities = np.array(priorities) / sum(priorities)
+        priorities = np.array(priorities, dtype=np.float64) 
+        total_priority = np.sum(priorities)
         
-        # Sample according to priorities
-        indices = np.random.choice(len(self.memory), batch_size, p=priorities)
+        if total_priority <= 0 or np.isnan(total_priority) or np.isinf(total_priority):
+            print("Warning: Problem with priorities, using uniform distribution")
+            probabilities = np.ones(len(priorities)) / len(priorities)
+        else:
+            probabilities = priorities / total_priority
+            
+            if not np.isclose(np.sum(probabilities), 1.0):
+                probabilities = probabilities / np.sum(probabilities)
         
-        # Sample random batch from memory
-        minibatch = random.sample(self.memory, batch_size)
+        try:
+            indices = np.random.choice(len(self.memory), batch_size, p=probabilities)
+        except ValueError:
+            print("Warning: Sampling error, using random sampling")
+            indices = np.random.choice(len(self.memory), batch_size)
         
-        # Pre-process states and next_states to ensure consistent shapes
+        minibatch = [self.memory[idx] for idx in indices]
+        
         states = []
         actions = []
         rewards = []
@@ -1866,14 +1770,12 @@ class PlayingAgent:
         for experience in minibatch:
             state, action, reward, next_state, done = experience
             
-            # Convert to numpy arrays of consistent shape if needed
             if not isinstance(state, np.ndarray):
                 state = np.array(state, dtype=np.float32)
             
             if not isinstance(next_state, np.ndarray):
                 next_state = np.array(next_state, dtype=np.float32)
             
-            # Ensure all states have the same shape
             if len(state.shape) > 1:
                 state = state.flatten()
                 
@@ -1886,39 +1788,32 @@ class PlayingAgent:
             next_states.append(next_state)
             dones.append(done)
         
-        # Convert to numpy arrays with consistent shapes
-        # Find the maximum length to pad all states to the same size
+
         max_state_length = max(len(state) for state in states)
         max_next_state_length = max(len(next_state) for next_state in next_states)
         
-        # Pad states if needed
         for i in range(len(states)):
             if len(states[i]) < max_state_length:
                 states[i] = np.pad(states[i], (0, max_state_length - len(states[i])), 'constant')
             if len(next_states[i]) < max_next_state_length:
                 next_states[i] = np.pad(next_states[i], (0, max_next_state_length - len(next_states[i])), 'constant')
         
-        # Convert to numpy arrays
         states = np.array(states, dtype=np.float32)
         actions = np.array(actions)
         rewards = np.array(rewards, dtype=np.float32)
         next_states = np.array(next_states, dtype=np.float32)
         dones = np.array(dones, dtype=np.float32)
         
-        # Predict current Q values
         targets = self.model.predict(states, verbose=0)
         
-        # Get next Q values from target network
         next_q_values = self.target_model.predict(next_states, verbose=0)
         
-        # Update Q values for the actions taken
         for i in range(batch_size):
             if dones[i]:
                 targets[i, actions[i]] = rewards[i]
             else:
                 targets[i, actions[i]] = rewards[i] + self.gamma * np.max(next_q_values[i])
         
-        # Train the model
         history = self.model.fit(states, targets, epochs=1, verbose=0)
         return history.history['loss'][0]
     
@@ -1965,21 +1860,16 @@ class PlayingAgent:
         best_cards = []
         best_hand_type = None
         
-        # Generate all possible combinations of cards (power set)
         n = len(hand)
         for i in range(1, 2**n):
-            # Convert number to binary to determine which cards to include
             binary = bin(i)[2:].zfill(n)
             selected_cards = [hand[j] for j in range(n) if binary[j] == '1']
             
-            # Skip if fewer than 5 cards (minimum for most poker hands)
             if len(selected_cards) < 5:
                 continue
                 
-            # Evaluate this combination
             hand_type, _, scoring_cards = evaluator.evaluate_hand(selected_cards)
             
-            # Calculate a score (e.g., hand type value * number of scoring cards)
             score = hand_type.value * len(scoring_cards)
             
             if score > best_score:
@@ -1994,10 +1884,8 @@ class PlayingAgent:
         More sophisticated exploration strategy that adapts based on 
         training progress and state characteristics
         """
-        # Base epsilon from standard decay
         current_epsilon = self.epsilon
         
-        # Modify epsilon based on episode number (explore more in early training)
         episode_factor = max(0.1, min(1.0, 5000 / (episode + 5000)))
         
         hand_quality = self._estimate_hand_quality(state)
@@ -2020,17 +1908,32 @@ class PlayingAgent:
     
     def _estimate_hand_quality(self, state):
         """Estimate the quality of the current hand (helper for adaptive_exploration)"""
-        # This would extract and analyze card information from the state
-        # to estimate how good the current hand is
-        # Return a value between 0 (poor hand) and 1 (excellent hand)
-        return 0.5  # Placeholder implementation
-    
+        if hasattr(self, 'game_manager') and self.game_manager.current_hand:
+            best_hand_info = self.game_manager.get_best_hand_from_current()
+            if best_hand_info:
+                hand_type, _ = best_hand_info
+                
+                hand_quality_map = {
+                    HandType.HIGH_CARD: 0.1,
+                    HandType.PAIR: 0.3,
+                    HandType.TWO_PAIR: 0.5,
+                    HandType.THREE_OF_A_KIND: 0.6,
+                    HandType.STRAIGHT: 0.7,
+                    HandType.FLUSH: 0.8,
+                    HandType.FULL_HOUSE: 0.85,
+                    HandType.FOUR_OF_A_KIND: 0.9,
+                    HandType.STRAIGHT_FLUSH: 1.0
+                }
+                
+                return hand_quality_map.get(hand_type, 0.1)
+            
+        return 0.5
+        
     def prioritized_replay(self, batch_size):
         """Prioritized Experience Replay implementation"""
         if len(self.memory) < batch_size:
             return
         
-        # Calculate TD errors for prioritization
         td_errors = []
         for state, action, reward, next_state, done in self.memory:
             state_array = np.array(state).reshape(1, -1)
@@ -2043,18 +1946,14 @@ class PlayingAgent:
             else:
                 target_q = reward + self.gamma * np.max(self.target_model.predict(next_state_array, verbose=0)[0])
             
-            # TD error is the difference between target and current Q-value
             td_error = abs(target_q - current_q)
             td_errors.append(td_error)
         
-        # Convert errors to probabilities with prioritization
-        probabilities = np.array(td_errors) ** 0.6  # Alpha parameter
+        probabilities = np.array(td_errors) ** 0.6
         probabilities = probabilities / np.sum(probabilities)
         
-        # Sample according to these probabilities
         indices = np.random.choice(len(self.memory), batch_size, p=probabilities)
         
-        # Get the samples
         states = []
         actions = []
         rewards = []
@@ -2068,14 +1967,12 @@ class PlayingAgent:
             next_states.append(self.memory[idx][3])
             dones.append(self.memory[idx][4])
         
-        # Convert to arrays
         states = np.array(states)
         actions = np.array(actions)
         rewards = np.array(rewards)
         next_states = np.array(next_states)
         dones = np.array(dones)
         
-        # Update Q-values
         targets = self.model.predict(states, verbose=0)
         next_q_values = self.target_model.predict(next_states, verbose=0)
         
@@ -2085,7 +1982,6 @@ class PlayingAgent:
             else:
                 targets[i, actions[i]] = rewards[i] + self.gamma * np.max(next_q_values[i])
         
-        # Train the model
         self.model.fit(states, targets, epochs=1, verbose=0)
 
 class StrategyAgent:
@@ -2105,7 +2001,6 @@ class StrategyAgent:
         self.recent_rewards = deque(maxlen=100)
         self.recent_actions = deque(maxlen=100)
         
-        # Action mapping for debugging
         self.action_map = {
             0: "Buy Shop Item 0",
             1: "Buy Shop Item 1",
@@ -2129,11 +2024,9 @@ class StrategyAgent:
         """Build a deeper neural network for predicting Q-values"""
         model = Sequential()
         
-        # Input layer and first hidden layer
         model.add(Dense(256, input_dim=self.state_size, activation='relu'))
         model.add(Dropout(0.2))
         
-        # Deeper network with intermediate layers
         model.add(Dense(256, activation='relu'))
         model.add(Dropout(0.2))
         model.add(Dense(128, activation='relu'))
@@ -2141,10 +2034,8 @@ class StrategyAgent:
         model.add(Dense(128, activation='relu'))
         model.add(Dropout(0.1))
         
-        # Output layer
         model.add(Dense(self.action_size, activation='linear'))
         
-        # Use Adam optimizer with a smaller learning rate
         model.compile(loss='mse', optimizer=Adam(learning_rate=0.0001))
         return model
     
@@ -2154,19 +2045,16 @@ class StrategyAgent:
 
     def remember(self, state, action, reward, next_state, done):
         """Store experience in replay memory with robust state size handling"""
-        # Convert to numpy arrays if needed
         if not isinstance(state, np.ndarray):
             state = np.array(state, dtype=np.float32)
         if not isinstance(next_state, np.ndarray):
             next_state = np.array(next_state, dtype=np.float32)
         
-        # Flatten multi-dimensional states
         if len(state.shape) > 1:
             state = state.flatten()
         if len(next_state.shape) > 1:
             next_state = next_state.flatten()
         
-        # Handle size mismatch by padding or truncating
         if len(state) != self.state_size:
             padded_state = np.zeros(self.state_size, dtype=np.float32)
             min_size = min(len(state), self.state_size)
@@ -2179,10 +2067,8 @@ class StrategyAgent:
             padded_next_state[:min_size] = next_state[:min_size]
             next_state = padded_next_state
         
-        # Store the padded states in memory
         self.memory.append((state, action, reward, next_state, done))
         
-        # Track rewards for analytics
         self.recent_rewards.append(reward)
     
     def act(self, state, valid_actions=None):
@@ -2203,7 +2089,6 @@ class StrategyAgent:
             
             state = padded_state
         
-        # Exploration-exploitation logic
         if np.random.rand() <= self.epsilon:
             if valid_actions is not None:
                 return random.choice(valid_actions)
@@ -2224,13 +2109,9 @@ class StrategyAgent:
         if len(self.memory) < batch_size:
             return
         
-        # Sample random batch from memory
         minibatch = random.sample(self.memory, batch_size)
         
-        # Get expected input size from model
-        expected_size = 77  # Hardcoded based on the error message
-        
-        # Pre-process states and next_states for consistent shapes
+        expected_size = 77  
         states = []
         actions = []
         rewards = []
@@ -2238,19 +2119,16 @@ class StrategyAgent:
         dones = []
         
         for state, action, reward, next_state, done in minibatch:
-            # Convert to numpy if needed
             if not isinstance(state, np.ndarray):
                 state = np.array(state, dtype=np.float32)
             if not isinstance(next_state, np.ndarray):
                 next_state = np.array(next_state, dtype=np.float32)
             
-            # Flatten multi-dimensional states
             if len(state.shape) > 1:
                 state = state.flatten()
             if len(next_state.shape) > 1:
                 next_state = next_state.flatten()
             
-            # Handle size mismatch by padding
             if len(state) != expected_size:
                 padded_state = np.zeros(expected_size, dtype=np.float32)
                 padded_state[:len(state)] = state
@@ -2267,25 +2145,21 @@ class StrategyAgent:
             next_states.append(next_state)
             dones.append(done)
         
-        # Convert to numpy arrays
         states = np.array(states)
         actions = np.array(actions)
         rewards = np.array(rewards)
         next_states = np.array(next_states)
         dones = np.array(dones)
         
-        # Get target values
         targets = self.model.predict(states, verbose=0)
         next_q_values = self.target_model.predict(next_states, verbose=0)
         
-        # Update targets for actions taken
         for i in range(batch_size):
             if dones[i]:
                 targets[i, actions[i]] = rewards[i]
             else:
                 targets[i, actions[i]] = rewards[i] + self.gamma * np.max(next_q_values[i])
         
-        # Train the model
         self.model.fit(states, targets, epochs=1, verbose=0)
     
     def act_with_explanation(self, state, valid_actions=None):
@@ -2353,52 +2227,41 @@ class StrategyAgent:
         if len(self.memory) < batch_size:
             return
         
-        # Calculate experience priorities based on rewards and action types
         priorities = []
         for state, action, reward, next_state, done in self.memory:
-            # Base priority is the absolute reward
-            priority = abs(reward) + 0.1  # Small base priority
+            priority = abs(reward) + 0.1  
             
-            # Increase priority for purchase actions (0-3) with positive rewards
             if action < 4 and reward > 0:
-                priority *= 8.0  # Double priority for successful purchases
+                priority *= 8.0  
                 
-            # Also increase priority for advancing to next ante
             if action == 15 and reward > 0:
-                priority *= 1.5  # Higher priority for successful ante advancement
+                priority *= 1.5  
                 
             priorities.append(priority)
         
-        # Normalize priorities
         total_priority = sum(priorities)
         if total_priority > 0:
             probabilities = [p / total_priority for p in priorities]
         else:
-            # If all priorities are 0, use uniform distribution
             probabilities = [1.0 / len(priorities)] * len(priorities)
         
-        # Sample based on priorities
         indices = np.random.choice(len(self.memory), batch_size, p=probabilities)
         
-        # Extract batches
         states = np.array([self.memory[i][0] for i in indices])
         actions = np.array([self.memory[i][1] for i in indices])
         rewards = np.array([self.memory[i][2] for i in indices])
         next_states = np.array([self.memory[i][3] for i in indices])
         dones = np.array([self.memory[i][4] for i in indices])
         
-        # Calculate target values
         targets = self.model.predict(states, verbose=0)
         next_q_values = self.target_model.predict(next_states, verbose=0)
         
-        # Update targets for the actions taken
         for i in range(batch_size):
             if dones[i]:
                 targets[i, actions[i]] = rewards[i]
             else:
                 targets[i, actions[i]] = rewards[i] + self.gamma * np.max(next_q_values[i])
         
-        # Train the model
         self.model.fit(states, targets, epochs=1, verbose=0)
         return
 
@@ -2407,7 +2270,6 @@ class StrategyAgent:
         if len(self.memory) < batch_size:
             return
         
-        # Calculate TD errors for all experiences in memory
         td_errors = []
         for state, action, reward, next_state, done in self.memory:
             state_array = np.array(state).reshape(1, -1)
@@ -2423,25 +2285,20 @@ class StrategyAgent:
             td_error = abs(target_q - current_q)
             td_errors.append(td_error)
         
-        # Convert errors to priorities and probabilities
         priorities = np.power(np.array(td_errors) + 1e-6, alpha)
         probs = priorities / np.sum(priorities)
         
-        # Sample according to priorities
         indices = np.random.choice(len(self.memory), batch_size, p=probs)
         
-        # Get sampled experiences
         states = np.array([self.memory[i][0] for i in indices])
         actions = np.array([self.memory[i][1] for i in indices])
         rewards = np.array([self.memory[i][2] for i in indices])
         next_states = np.array([self.memory[i][3] for i in indices])
         dones = np.array([self.memory[i][4] for i in indices])
         
-        # Calculate importance sampling weights
         weights = np.power(len(self.memory) * probs[indices], -beta)
-        weights /= np.max(weights)  # Normalize
+        weights /= np.max(weights)
         
-        # Update model with importance sampling weights
         targets = self.model.predict(states, verbose=0)
         next_q_values = self.target_model.predict(next_states, verbose=0)
         
@@ -2451,7 +2308,6 @@ class StrategyAgent:
             else:
                 targets[i, actions[i]] = rewards[i] + self.gamma * np.max(next_q_values[i])
         
-        # Use custom loss with importance sampling weights
         history = self.model.fit(states, targets, epochs=1, verbose=0, 
                                 sample_weight=weights)
         
@@ -2508,6 +2364,7 @@ def use_pending_tarots(self):
 
 
 
+
 def create_shop_for_ante(ante_number, blind_type):
     """Create a new shop with appropriate items for the specified ante and blind type"""
     print(f"Creating new shop for Ante {ante_number}, {blind_type}")
@@ -2531,7 +2388,7 @@ def create_shop_for_ante(ante_number, blind_type):
 def add_demonstration_examples(play_agent, num_examples=300):
     """Add expert demonstration examples to the agent's memory with better poker hand recognition"""
     env = BalatroEnv(config={'simplified': True})
-    hand_evaluator = HandEvaluator()  # Create a hand evaluator instance
+    hand_evaluator = HandEvaluator()
     
     print(f"Adding {num_examples} demonstration examples...")
     examples_added = 0
@@ -2544,11 +2401,9 @@ def add_demonstration_examples(play_agent, num_examples=300):
         while not done and steps < 50:
             steps += 1
             
-            # Evaluate all possible hands from current cards
             potential_hands = []
             current_hand = env.game_manager.current_hand
             
-            # Try all combinations of 5 or more cards
             for r in range(5, len(current_hand) + 1):
                 for combo in itertools.combinations(range(len(current_hand)), r):
                     cards = [current_hand[i] for i in combo]
@@ -2556,10 +2411,8 @@ def add_demonstration_examples(play_agent, num_examples=300):
                     hand_value = hand_type.value
                     potential_hands.append((list(combo), hand_value, hand_type))
             
-            # Sort by hand value (descending)
             potential_hands.sort(key=lambda x: x[1], reverse=True)
             
-            # If we have a good hand, play it
             if potential_hands and potential_hands[0][1] >= HandType.TWO_PAIR.value:
                 indices = potential_hands[0][0]
                 action = 0
@@ -2568,29 +2421,23 @@ def add_demonstration_examples(play_agent, num_examples=300):
                 
                 next_state, reward, done, info = env.step_play(action)
                 
-                # Enhance reward for good hands
-                enhanced_reward = reward * 1.5  # Boost the reward
+                enhanced_reward = reward * 4.0
                 
-                # Add this experience to memory
                 play_agent.remember(state, action, enhanced_reward, next_state, done)
                 examples_added += 1
                 
                 state = next_state
             
-            # If no good hand and we can discard, do so
             elif env.game_manager.discards_used < env.game_manager.max_discards_per_round:
-                # Find the lowest cards to discard
                 cards_with_values = [(i, card.rank.value) for i, card in enumerate(current_hand)]
-                cards_with_values.sort(key=lambda x: x[1])  # Sort by rank value
+                cards_with_values.sort(key=lambda x: x[1]) 
                 
-                # Discard up to 3 of the lowest cards
                 indices = [idx for idx, _ in cards_with_values[:min(3, len(cards_with_values))]]
                 
                 action = 0
                 for idx in indices:
                     action |= (1 << idx)
                 
-                # Make it a discard action
                 action += 256
                 
                 next_state, reward, done, info = env.step_play(action)
@@ -2599,15 +2446,13 @@ def add_demonstration_examples(play_agent, num_examples=300):
                 
                 state = next_state
             
-            # Otherwise, play the best hand we have
             else:
                 if potential_hands:
-                    indices = potential_hands[0][0]  # Best hand we have
+                    indices = potential_hands[0][0]
                     action = 0
                     for idx in indices:
                         action |= (1 << idx)
                 else:
-                    # Play all cards as last resort
                     action = (1 << len(current_hand)) - 1
                 
                 next_state, reward, done, info = env.step_play(action)
@@ -2616,9 +2461,8 @@ def add_demonstration_examples(play_agent, num_examples=300):
                 
                 state = next_state
             
-            # Handle shop phase if needed - just skip it for demonstration
             if info.get('shop_phase', False) and not done:
-                next_state, _, done, _ = env.step_strategy(15)  # Skip action
+                next_state, _, done, _ = env.step_strategy(15) 
                 state = next_state
     
     print(f"Successfully added {examples_added} demonstration examples to memory")
@@ -2629,10 +2473,8 @@ def add_demonstration_examples(play_agent, num_examples=300):
 def train_with_separate_agents():
     """Training function with improved shop behavior for Balatro RL agent and win tracking"""
     
-    # Initialize the environment
     env = BalatroEnv(config={})
     
-    # Get state and action dimensions
     play_state_size = len(env._get_play_state())
     play_action_size = env._define_play_action_space()
     
@@ -2642,37 +2484,30 @@ def train_with_separate_agents():
     print(f"Play agent: state_size={play_state_size}, action_size={play_action_size}")
     print(f"Strategy agent: state_size={strategy_state_size}, action_size={strategy_action_size}")
     
-    # Create agents
     play_agent = PlayingAgent(state_size=play_state_size, action_size=play_action_size)
     strategy_agent = StrategyAgent(state_size=strategy_state_size, action_size=strategy_action_size)
     
-    # Add basic play demonstrations for play_agent
     add_demonstration_examples(play_agent, num_examples=200)
     
-    # Training parameters
-    episodes = 10000
+    episodes = 7500
     batch_size = 64
     log_interval = 500
-    save_interval = 1000
+    #save_interval = 1000
     
-    # Training stats
     play_rewards = []
     strategy_rewards = []
     
-    # Tracking metrics over time
-    win_history = []  # Track if episode was a win (reached ante 8+)
-    max_ante_history = []  # Track max ante reached in each episode
-    win_rate_over_time = []  # Track win rate over time
-    avg_max_ante_over_time = []  # Track average max ante over time
+    win_history = []
+    max_ante_history = []
+    win_rate_over_time = [] 
+    avg_max_ante_over_time = []
     
-    # Item purchase history
     jokers_purchased_history = []
     planets_purchased_history = []
     tarots_purchased_history = []
     packs_opened_history = []
     joker_acquisition_counts = {}
 
-    # For win rate rolling window
     win_window_size = 100
     rolling_wins = []
     
@@ -2682,7 +2517,6 @@ def train_with_separate_agents():
         max_ante = 1
         game_steps = 0
         
-        # For tracking performance
         play_episode_reward = 0
         strategy_episode_reward = 0
         items_purchased = 0
@@ -2691,18 +2525,14 @@ def train_with_separate_agents():
         episode_tarots_purchased = 0
         episode_packs_opened = 0
         
-        # For tracking joker diversity
         unique_jokers = set()
         
-        # Game loop control flags
         done = False
         show_shop_next = False
         
-        # Game loop
-        while not done and game_steps < 500:  # Limit to prevent infinite loops
+        while not done and game_steps < 500:
             game_steps += 1
             
-            # SHOP PHASE
             if show_shop_next:
                 if env.game_manager.game.current_ante > 24:
                     print("\n===== GAME COMPLETED! =====")
@@ -2723,32 +2553,25 @@ def train_with_separate_agents():
                 while not shop_done and not done and shop_steps < max_shop_steps:
                     shop_steps += 1
                     
-                    # Get strategy state and action
                     strategy_state = env._get_strategy_state()
                     valid_actions = env.get_valid_strategy_actions()
                     strategy_action = strategy_agent.act(strategy_state, valid_actions)
                     
-                    # Execute shop action
                     next_strategy_state, strategy_reward, strategy_done, strategy_info = env.step_strategy(strategy_action)
                     
-                    # Store experience
                     strategy_agent.remember(strategy_state, strategy_action, strategy_reward, next_strategy_state, strategy_done)
                     
-                    # Update tracking variables
                     strategy_episode_reward += strategy_reward
                     total_reward += strategy_reward
                     done = strategy_done
                     
-                    # Track item purchases
                     message = strategy_info.get('message', '')
                     if strategy_action < 4 and "Bought" in message:
                         items_purchased += 1
                         
-                        # Track joker purchases specifically
                         if "joker" in message.lower():
                             episode_jokers_purchased += 1
                             
-                            # Extract joker name from the message
                             parts = message.split("Bought ")
                             if len(parts) > 1:
                                 name_parts = parts[1].split(" for $")
@@ -2757,21 +2580,16 @@ def train_with_separate_agents():
                                     unique_jokers.add(joker_name)
                                     joker_acquisition_counts[joker_name] = joker_acquisition_counts.get(joker_name, 0) + 1
 
-                        # Track planet purchases
                         elif "planet" in message.lower():
                             episode_planets_purchased += 1
                             
-                        # Track tarot purchases
                         elif "tarot" in message.lower():
                             episode_tarots_purchased += 1
                             
-                        # Track pack purchases
                         elif any(pack_type in message.lower() for pack_type in ["pack", "buffoon", "celestial", "arcana"]):
                             episode_packs_opened += 1
                     
-                    # Check if we're advancing to next ante (exit shop)
                     if strategy_action == 15 or done:
-                        # Check if we have pending tarots to use before advancing
                         if hasattr(env, 'pending_tarots') and env.pending_tarots and env.game_manager.current_hand:
                             env.use_pending_tarots()
                         
@@ -2779,86 +2597,71 @@ def train_with_separate_agents():
                         show_shop_next = False
                         print(f"Advanced to Ante {env.game_manager.game.current_ante}")
                         
-                        # Deal a new hand if needed
                         if not env.game_manager.current_hand and not done:
                             env.game_manager.deal_new_hand()
                 
-                # If we exited by reaching max shop steps
                 if shop_steps >= max_shop_steps and not shop_done:
                     print(f"Forcing shop exit after {shop_steps} steps")
                     show_shop_next = False
                     
-                    # Deal a new hand if needed
                     if not env.game_manager.current_hand and not done:
                         env.game_manager.deal_new_hand()
                 
-                # Go to next iteration of main loop
                 continue
             
-            # PLAY PHASE
             play_state = env._get_play_state()
             valid_actions = env.get_valid_play_actions()
             play_action = play_agent.act(play_state, valid_actions)
             
-            # Take action
             next_play_state, play_reward, done, play_info = env.step_play(play_action)
             
-            # Store experience
             play_agent.remember(play_state, play_action, play_reward, next_play_state, done)
             
-            # Update tracking variables
             play_episode_reward += play_reward
             total_reward += play_reward
             
-            # Check if ante beaten - enter shop phase
             if play_info.get('shop_phase', False) and not done:
                 print(f"\n***** ANTE {env.game_manager.game.current_ante} BEATEN! *****")
                 show_shop_next = True
             
-            # Track max ante reached
             max_ante = max(max_ante, env.game_manager.game.current_ante)
         
-        # Record metrics for this episode
         is_win = max_ante > 24
         win_history.append(1 if is_win else 0)
         max_ante_history.append(max_ante)
         
-        # Record purchase history
         jokers_purchased_history.append(episode_jokers_purchased)
         planets_purchased_history.append(episode_planets_purchased)
         tarots_purchased_history.append(episode_tarots_purchased)
         packs_opened_history.append(episode_packs_opened)
-        
-        # Update rolling win window
+        if e % 100 == 0:
+            hand_counts, percentages = analyze_hand_selection(play_agent, env)
+            print("\nHand Type Distribution:")
+            for hand_type, percentage in sorted(percentages.items(), key=lambda x: HandType[x[0]].value):
+                print(f"  {hand_type}: {percentage:.1f}%")
         rolling_wins.append(1 if is_win else 0)
         if len(rolling_wins) > win_window_size:
             rolling_wins.pop(0)
         
-        # Calculate current rolling win rate and average max ante
         current_win_rate = 100 * sum(rolling_wins) / len(rolling_wins)
         win_rate_over_time.append(current_win_rate)
         
-        # Average max ante over last 100 episodes
         recent_antes = max_ante_history[-win_window_size:] if len(max_ante_history) >= win_window_size else max_ante_history
         avg_max_ante = sum(recent_antes) / len(recent_antes)
         avg_max_ante_over_time.append(avg_max_ante)
         
-        # Train agents using improved methods
         if len(play_agent.memory) >= batch_size:
             play_agent.replay(batch_size)
         
         if len(strategy_agent.memory) >= batch_size:
             strategy_agent.prioritized_strategy_replay(batch_size)
         
-        # Decay exploration rates
         play_agent.decay_epsilon()
         strategy_agent.decay_epsilon()
         
-        # Track episode statistics
         play_rewards.append(play_episode_reward)
         strategy_rewards.append(strategy_episode_reward)
         
-        # Logging
         if (e + 1) % log_interval == 0:
             avg_play_reward = sum(play_rewards[-log_interval:]) / log_interval
             avg_strategy_reward = sum(strategy_rewards[-log_interval:]) / log_interval
@@ -2879,9 +2682,6 @@ def train_with_separate_agents():
             print(f"Play Epsilon: {play_agent.epsilon:.3f}")
             print(f"Strategy Epsilon: {strategy_agent.epsilon:.3f}")
         
-        if (e + 1) % save_interval == 0:
-            play_agent.save_model(f"play_agent_ep{e+1}.h5")
-            strategy_agent.save_model(f"strategy_agent_ep{e+1}.h5")
     
     play_agent.save_model("play_agent_final.h5")
     strategy_agent.save_model("strategy_agent_final.h5")
@@ -2899,7 +2699,6 @@ def track_joker_usage(env, episodes=50):
     """Track which jokers are acquired and used most frequently"""
     env.reset()
     
-    # Dictionary to track joker frequency
     joker_counts = {}
     
     for e in range(episodes):
@@ -2907,20 +2706,17 @@ def track_joker_usage(env, episodes=50):
         done = False
         game_steps = 0
         
-        # Track jokers seen in this episode
         episode_jokers = set()
         
         while not done and game_steps < 500:
             game_steps += 1
             
-            # Check current jokers in inventory
             for joker in env.game_manager.game.inventory.jokers:
                 if hasattr(joker, 'name'):
                     joker_name = joker.name
                     episode_jokers.add(joker_name)
                     joker_counts[joker_name] = joker_counts.get(joker_name, 0) + 1
             
-            # Take a random action just to advance the game
             if hasattr(env, 'current_shop') and env.current_shop is not None:
                 valid_actions = env.get_valid_strategy_actions()
                 if valid_actions:
@@ -2939,21 +2735,16 @@ def track_joker_usage(env, episodes=50):
 
 def plot_joker_usage(joker_counts, top_n=15):
     """Create a bar chart showing the most frequently used jokers"""
-    # Sort jokers by frequency
     sorted_jokers = sorted(joker_counts.items(), key=lambda x: x[1], reverse=True)
     
-    # Take top N jokers
     top_jokers = sorted_jokers[:top_n]
     
-    # Separate names and counts
     names = [j[0] for j in top_jokers]
     counts = [j[1] for j in top_jokers]
     
-    # Create plot
     plt.figure(figsize=(14, 8))
     bars = plt.bar(names, counts, color='skyblue')
     
-    # Add value labels on top of bars
     for bar in bars:
         height = bar.get_height()
         plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
@@ -2976,10 +2767,8 @@ def plot_training_metrics(episodes, win_history, max_ante_history, win_rate_over
     import numpy as np
     from matplotlib.ticker import MaxNLocator
     
-    # Create figure with subplots
     plt.figure(figsize=(15, 12))
     
-    # Plot 1: Win Rate Over Time
     plt.subplot(2, 2, 1)
     plt.plot(np.arange(1, len(win_rate_over_time) + 1), win_rate_over_time)
     plt.title('Win Rate Over Time (100-episode rolling window)')
@@ -2987,49 +2776,42 @@ def plot_training_metrics(episodes, win_history, max_ante_history, win_rate_over
     plt.ylabel('Win Rate (%)')
     plt.grid(True)
     
-    # Plot 2: Average Max Ante Over Time
     plt.subplot(2, 2, 2)
     plt.plot(np.arange(1, len(avg_max_ante_over_time) + 1), avg_max_ante_over_time)
-    plt.title('Average Max Ante Over Time (100-episode rolling window)')
+    plt.title('Average Max Round Over Time (100-episode rolling window)')
     plt.xlabel('Episode')
-    plt.ylabel('Average Max Ante')
+    plt.ylabel('Average Max Round')
     plt.grid(True)
     plt.gca().yaxis.set_major_locator(MaxNLocator(integer=True))
     
-    # Plot 3: Max Ante per Episode (heatmap/scatter)
     plt.subplot(2, 2, 3)
     plt.scatter(np.arange(1, len(max_ante_history) + 1), max_ante_history, 
                alpha=0.3, s=3, c=max_ante_history, cmap='viridis')
     
-    # Add a horizontal line at ante 8 (win threshold)
-    plt.axhline(y=8, color='r', linestyle='--', alpha=0.7, label='Win Threshold (Ante 8)')
+    plt.axhline(y=8, color='r', linestyle='--', alpha=0.7, label='Win Threshold (Round 24)')
     
-    plt.title('Max Ante Reached per Episode')
+    plt.title('Max Round Reached per Episode')
     plt.xlabel('Episode')
-    plt.ylabel('Max Ante')
+    plt.ylabel('Max Round')
     plt.grid(True)
-    plt.colorbar(label='Ante Level')
+    plt.colorbar(label='Round Level')
     plt.legend()
     plt.gca().yaxis.set_major_locator(MaxNLocator(integer=True))
     
-    # Plot 4: Item Purchases Over Time (stacked area)
     plt.subplot(2, 2, 4)
     
-    # Calculate moving average with window size 100
     window_size = 100
     jokers_smooth = moving_average(jokers_history, window_size)
     planets_smooth = moving_average(planets_history, window_size)
     tarots_smooth = moving_average(tarots_history, window_size)
     packs_smooth = moving_average(packs_history, window_size)
     
-    # Make sure all arrays have the same length
     min_length = min(len(jokers_smooth), len(planets_smooth), len(tarots_smooth), len(packs_smooth))
     jokers_smooth = jokers_smooth[:min_length]
     planets_smooth = planets_smooth[:min_length]
     tarots_smooth = tarots_smooth[:min_length]
     packs_smooth = packs_smooth[:min_length]
     
-    # Create x-axis values
     x = np.arange(window_size, window_size + min_length)
     
     plt.stackplot(x, 
@@ -3065,11 +2847,9 @@ def evaluate_with_purchase_tracking(play_agent, strategy_agent, episodes=20):
     """Evaluate agents with tracking of shop purchase behavior"""
     env = BalatroEnv()
     
-    # Save original epsilon values
     play_epsilon = play_agent.epsilon
     strategy_epsilon = strategy_agent.epsilon
     
-    # Disable exploration for evaluation
     play_agent.epsilon = 0
     strategy_agent.epsilon = 0
     
@@ -3104,19 +2884,16 @@ def evaluate_with_purchase_tracking(play_agent, strategy_agent, episodes=20):
             game_steps += 1
             
             if shop_phase:
-                # Process shop actions
                 strategy_state = env._get_strategy_state()
                 valid_actions = env.get_valid_strategy_actions()
                 strategy_action = strategy_agent.act(strategy_state, valid_actions)
                 
                 next_state, reward, done, info = env.step_strategy(strategy_action)
                 
-                # Track purchases
                 message = info.get('message', '')
                 if strategy_action < 4 and "Bought" in message:
                     items_purchased += 1
                     
-                    # Identify item type
                     if "joker" in message.lower():
                         jokers_bought += 1
                     elif "planet" in message.lower():
@@ -3126,31 +2903,25 @@ def evaluate_with_purchase_tracking(play_agent, strategy_agent, episodes=20):
                     else:
                         boosters_bought += 1
                 
-                # Exit shop phase on skip action
                 if strategy_action == 15 or done:
                     shop_phase = False
                     
-                    # Deal a new hand if needed
                     if not env.game_manager.current_hand and not done:
                         env.game_manager.deal_new_hand()
                         
             else:
-                # Regular gameplay
                 play_state = env._get_play_state()
                 valid_actions = env.get_valid_play_actions()
                 play_action = play_agent.act(play_state, valid_actions)
-                
-                next_state, reward, done, info = env.step_play(play_action)
-                
-                # Check if ante beaten - enter shop phase
+
+                next_play_state, play_reward, done, info = env.step_play(play_action)
+                                
                 if info.get('shop_phase', False) and not done:
                     shop_phase = True
                     env.update_shop()
                 
-                # Track max ante
                 max_ante = max(max_ante, env.game_manager.game.current_ante)
         
-        # Record results
         results['max_antes'].append(max_ante)
         results['items_purchased'].append(items_purchased)
         results['item_types']['joker'] += jokers_bought
@@ -3158,16 +2929,13 @@ def evaluate_with_purchase_tracking(play_agent, strategy_agent, episodes=20):
         results['item_types']['tarot'] += tarots_bought
         results['item_types']['booster'] += boosters_bought
         
-        # Consider a win if beat ante 8 (round 24)
         if max_ante > 24:
             results['win_rate'] += 1
     
-    # Calculate final metrics
     results['win_rate'] = (results['win_rate'] / episodes) * 100
     results['average_score'] = sum(results['max_antes']) / episodes
     results['avg_items_purchased'] = sum(results['items_purchased']) / episodes
     
-    # Report item purchase breakdown
     total_items = sum(results['items_purchased'])
     if total_items > 0:
         results['item_types']['joker_percent'] = (results['item_types']['joker'] / total_items) * 100
@@ -3175,28 +2943,70 @@ def evaluate_with_purchase_tracking(play_agent, strategy_agent, episodes=20):
         results['item_types']['tarot_percent'] = (results['item_types']['tarot'] / total_items) * 100
         results['item_types']['booster_percent'] = (results['item_types']['booster'] / total_items) * 100
     else:
-        # Default to zeros if no items purchased
         results['item_types']['joker_percent'] = 0
         results['item_types']['planet_percent'] = 0
         results['item_types']['tarot_percent'] = 0
         results['item_types']['booster_percent'] = 0
     
-    # Restore original epsilon values
     play_agent.epsilon = play_epsilon
     strategy_agent.epsilon = strategy_epsilon
     
     return results
 
 
+def analyze_hand_selection(play_agent, env, episodes=20):
+    """Analyze what kinds of hands the agent is selecting"""
+    hand_counts = {ht.name: 0 for ht in HandType}
+    hand_evaluator = HandEvaluator()
+    
+    original_epsilon = play_agent.epsilon
+    play_agent.epsilon = 0.0 
+    
+    for _ in range(episodes):
+        state = env.reset()
+        done = False
+        
+        while not done:
+            if not env.game_manager.current_hand:
+                break
+                
+            valid_actions = env.get_valid_play_actions()
+            action = play_agent.act(state, valid_actions)
+            
+            if action < 256: 
+                indices = env._convert_action_to_card_indices(action)
+                if indices:
+                    cards = [env.game_manager.current_hand[i] for i in indices 
+                           if i < len(env.game_manager.current_hand)]
+                    if cards:
+                        hand_type, _, _ = hand_evaluator.evaluate_hand(cards)
+                        hand_counts[hand_type.name] += 1
+            
+            next_state, _, done, info = env.step_play(action)
+            state = next_state
+            
+            if info.get('shop_phase', False) and not done:
+                next_state, _, done, _ = env.step_strategy(15) 
+                state = next_state
+    
+    total_hands = sum(hand_counts.values())
+    if total_hands > 0:
+        percentages = {ht: (count / total_hands) * 100 for ht, count in hand_counts.items()}
+    else:
+        percentages = {ht: 0 for ht in hand_counts}
+    
+    play_agent.epsilon = original_epsilon
+    
+    return hand_counts, percentages
+
+
 def evaluate_agents(play_agent, strategy_agent, episodes=100):
     """Evaluate agent performance without exploration"""
     env = BalatroEnv()
     
-    # Save original epsilon values
     play_epsilon = play_agent.epsilon
     strategy_epsilon = strategy_agent.epsilon
     
-    # Disable exploration for evaluation
     play_agent.epsilon = 0
     strategy_agent.epsilon = 0
     
@@ -3222,11 +3032,9 @@ def evaluate_agents(play_agent, strategy_agent, episodes=100):
         
         done = False
         
-        # Game loop
         while not done and game_steps < 500:
             game_steps += 1
             
-            # PLAY PHASE
             valid_play_actions = env.get_valid_play_actions()
             play_action = play_agent.act(play_state, valid_actions=valid_play_actions)
             next_play_state, play_reward, done, info = env.step_play(play_action)
@@ -3237,12 +3045,10 @@ def evaluate_agents(play_agent, strategy_agent, episodes=100):
             hands_played += 1
             max_ante = max(max_ante, env.game_manager.game.current_ante)
             
-            # Check if we need to enter shop phase
             if info.get('shop_phase', False) and not done:
                 strategy_state = env._get_strategy_state()
                 shop_done = False
                 
-                # Shop phase loop
                 while not shop_done and not done and game_steps < 500:
                     game_steps += 1
                     valid_strategy_actions = env.get_valid_strategy_actions()
@@ -3253,15 +3059,12 @@ def evaluate_agents(play_agent, strategy_agent, episodes=100):
                     strategy_total_reward += strategy_reward
                     done = strategy_done
                     
-                    # Check if we need to exit shop phase
                     if strategy_action == 15 or not env.game_manager.current_ante_beaten or done:
                         shop_done = True
                 
-                # Get fresh play state after shop
                 if not done:
                     play_state = env._get_play_state()
         
-        # Record results
         results['play_rewards'].append(play_total_reward)
         results['strategy_rewards'].append(strategy_total_reward)
         results['max_antes'].append(max_ante)
@@ -3274,11 +3077,9 @@ def evaluate_agents(play_agent, strategy_agent, episodes=100):
         if (e + 1) % 10 == 0:
             print(f"Evaluated {e + 1}/{episodes} episodes. Current max ante: {max_ante}")
     
-    # Calculate averages
     results['win_rate'] = results['win_rate'] / episodes * 100
     results['average_score'] = sum(results['max_antes']) / episodes
     
-    # Restore original epsilon values
     play_agent.epsilon = play_epsilon
     strategy_agent.epsilon = strategy_epsilon
     
@@ -3286,10 +3087,8 @@ def evaluate_agents(play_agent, strategy_agent, episodes=100):
 
 
 if __name__ == "__main__":
-    # Train agents with improved shop behavior
     play_agent, strategy_agent = train_with_separate_agents()
     
-    # Evaluate final performance with purchase tracking
     results = evaluate_with_purchase_tracking(play_agent, strategy_agent, episodes=50)
     
     print("\n===== FINAL EVALUATION =====")

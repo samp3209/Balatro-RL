@@ -279,12 +279,10 @@ def create_tarot_by_name(name: str) -> Optional[Tarot]:
     Returns:
         A Tarot card object with appropriate properties
     """
-    # Convert name to lowercase and remove "the" if present
     tarot_name = name.lower().strip()
     if tarot_name.startswith("the "):
         tarot_name = tarot_name[4:]
     
-    # Map string names to TarotType enum values
     tarot_map = {
         "fool": TarotType.THE_FOOL,
         "magician": TarotType.THE_MAGICIAN,

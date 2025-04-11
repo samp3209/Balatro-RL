@@ -38,7 +38,7 @@ class ShopItem:
 
 class Shop:
     def __init__(self):
-        self.items = [None, None, None, None]  # Two main items and two pack/booster items
+        self.items = [None, None, None, None] 
         self.discount = 0
         self.has_voucher = False
         self.restock()
@@ -197,14 +197,11 @@ class Shop:
         """Process the booster pack and add cards to inventory"""
         if "STANDARD" in booster_type.upper():
             for _ in range(5):
-                # Correct parameter order for Card constructor: (suit, rank)
                 suit = random.choice(list(Suit))
                 rank = random.choice(list(Rank))
                 
-                # Make sure we're passing the right types
                 if not isinstance(suit, Suit) or not isinstance(rank, Rank):
                     print(f"WARNING: Invalid types - suit: {type(suit)}, rank: {type(rank)}")
-                    # Try to convert if needed
                     if isinstance(suit, int):
                         for s in Suit:
                             if s.value == suit:
@@ -216,15 +213,13 @@ class Shop:
                                 rank = r
                                 break
                 
-                # Create the card with correct parameter order
                 try:
-                    card = Card(suit, rank)  # Note the order: suit first, then rank
+                    card = Card(suit, rank)
                     inventory.add_card_to_deck(card)
                     print(f"Added {rank.name} of {suit.name} to deck")
                 except Exception as e:
                     print(f"Error creating card: {e}")
         
-        # Handle other pack types (Celestial, Arcana, etc.)
         elif "CELESTIAL" in booster_type.upper():
             planet_types = [
                 "Mercury", "Venus", "Earth", "Mars", 
@@ -259,7 +254,7 @@ class AnteShops:
         shops[1] = {
             "small_blind": [
                 {"item_type": ShopItemType.JOKER, "name": "Green", "price": 4},
-                {"item_type": ShopItemType.PLANET, "name": "Mars", "price": 3},
+                {"item_type": ShopItemType.PLANET, "name": "Uranus", "price": 3},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.BUFFOON, "price": 4, 
                  "contents": ["Mr. Bones", "Cartomancer"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.CELESTIAL, "price": 4, 
@@ -267,7 +262,7 @@ class AnteShops:
             ],
             "medium_blind": [
                 {"item_type": ShopItemType.JOKER, "name": "Delayed Gratification", "price": 4},
-                {"item_type": ShopItemType.JOKER, "name": "Bootstraps", "price": 5},
+                {"item_type": ShopItemType.JOKER, "name": "Droll", "price": 4},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.CELESTIAL, "price": 4, 
                  "contents": ["Saturn", "Uranus", "Pluto"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.ARCANA, "price": 4, 
@@ -286,7 +281,7 @@ class AnteShops:
         shops[2] = {
             "small_blind": [
                 {"item_type": ShopItemType.TAROT, "name": "Hierophant", "price": 3},
-                {"item_type": ShopItemType.JOKER, "name": "Droll", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "Bootstraps", "price": 5},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.JUMBO_ARCANA, "price": 6, 
                  "contents": ["Tower", "Moon", "Chariot", "World", "Wheel of Fortune"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.STANDARD, "price": 4, 
@@ -294,7 +289,7 @@ class AnteShops:
             ],
             "medium_blind": [
                 {"item_type": ShopItemType.TAROT, "name": "Sun", "price": 3},
-                {"item_type": ShopItemType.JOKER, "name": "Clever", "price": 4},
+                {"item_type": ShopItemType.JOKER, "name": "The Duo", "price": 8},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.CELESTIAL, "price": 4, 
                  "contents": ["Mercury", "Saturn", "Uranus"]},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.MEGA_CELESTIAL, "price": 8, 
@@ -409,7 +404,7 @@ class AnteShops:
                  "contents": ["Moon", "Sun", "High Priestess"]}
             ],
             "boss_blind": [
-                {"item_type": ShopItemType.JOKER, "name": "The Duo", "price": 8},
+                {"item_type": ShopItemType.JOKER, "name": "Clever", "price": 4},
                 {"item_type": ShopItemType.TAROT, "name": "Temperance", "price": 3},
                 {"item_type": ShopItemType.BOOSTER, "pack_type": PackType.ARCANA, "price": 4, 
                  "contents": ["Hermit", "Star", "Death"]},
@@ -529,12 +524,10 @@ class FixedShop(Shop):
         self.discount = 0
         self.has_voucher = False
         
-        # Then set up shop-specific attributes
         self.ante_shops = AnteShops()
         self.ante_number = ante_number
         self.shop_type = shop_type
         
-        # Fill the shop with appropriate items
         self._initialize_fixed_shop()
         
         #print(f"Created FixedShop for Ante {ante_number}, {shop_type}")
@@ -573,7 +566,6 @@ def parse_card(card_string: str) -> Card:
     """Parse card string like '3 glass heart' into a Card object with enhancements"""
     parts = card_string.split()
     
-    # Map string rank to Rank enum
     rank_map = {
         "A": Rank.ACE, 
         "2": Rank.TWO,

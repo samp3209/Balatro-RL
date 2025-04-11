@@ -663,14 +663,11 @@ class Game:
         
     def reset_for_new_round(self):
         """Reset game state for a new round with special handling for enhanced cards"""
-        # Handle special cases for enhanced cards BEFORE resetting the deck
         self.handle_enhanced_deck_reset()
         
-        # Reset state for all cards
         for card in self.inventory.deck + self.played_cards + self.discarded_cards:
             card.reset_state()
             
-        # Reset counters
         self.hands_played = 0
         self.hands_discarded = 0
         self.face_cards_discarded_count = 0
