@@ -204,38 +204,47 @@ class BalatroEnv:
                         if item.item_type == ShopItemType.JOKER:
                             item_name = item.item.name if hasattr(item.item, 'name') else "Joker"
                             
-                            base_reward = 25.0 * (1.0 / (0.5 * ante_num))
+                            base_reward = 20.0 * (1.0 / (0.3 * ante_num + 0.7))
                             
+                            joker_count_scale = 1.0
                             if joker_count_before == 0:
-                                base_reward *= 3.5
-                                
+                                joker_count_scale = 10.5  
+                            elif joker_count_before < 2:
+                                joker_count_scale = 10.5 
+                            elif joker_count_before < 4:
+                                joker_count_scale = 9.5 
+                            elif joker_count_before >= 4:
+                                joker_count_scale = 8.0  
+                            
+                            if joker_count_before == 4:
+                                joker_count_scale = 8.0
+                            
+                            if joker_count_before < min_expected_jokers:
+                                deficit_scale = 1.0 + 0.5 * (min_expected_jokers - joker_count_before)
+                                joker_count_scale *= deficit_scale
+                            
                             joker_exists = item_name in joker_names
                             if not joker_exists:
-                                diversity_bonus = 15.0
+                                diversity_bonus = 12.0
                                 if ante_num >= 3:
-                                    diversity_bonus *= 1.5
+                                    diversity_bonus *= 1.3
                                 base_reward += diversity_bonus
-                                
+                            
                             powerful_jokers = [
-                                "Mr. Bones", "Bootstraps", "Socks and Buskin",
-                                "The Duo", "Rocket", "Blackboard", "Smiley"
+                                "Bootstraps", "Socks and Buskin",
+                                "The Duo", "Rocket", "Blackboard", "Smiley", "Green"
                             ]
                             if hasattr(item.item, 'name') and item.item.name in powerful_jokers:
-                                tier_multiplier = 1.5 if ante_num <= 3 else 1.0
-                                base_reward += 20.0 * tier_multiplier
-                                
-                            if joker_count_before < min_expected_jokers:
-                                base_reward *= 1.5
-                            elif joker_count_before >= 6:  
-                                base_reward *= 0.7
+                                tier_multiplier = 10.5 if ante_num <= 1 else 1.2
+                                base_reward += 15.0 * tier_multiplier
                             
                             value_multiplier = 1.0
                             if price <= 3:
-                                value_multiplier = 2.0
+                                value_multiplier = 1.8
                             elif price <= 5:
-                                value_multiplier = 1.5
-                                
-                            reward = base_reward * value_multiplier
+                                value_multiplier = 1.4
+                            
+                            reward = base_reward * joker_count_scale * value_multiplier
                             
                         elif item.item_type == ShopItemType.PLANET:
                             item_name = item.item.name if hasattr(item.item, 'name') else "Planet"
@@ -299,14 +308,14 @@ class BalatroEnv:
                             pack_type = str(item.item).upper()
                             
                             if "BUFFOON" in pack_type:
-                                base_reward *= 5.8
+                                base_reward *= 3.8
                                 
                                 if joker_count_before < min_expected_jokers:
-                                    base_reward *= 20.4
+                                    base_reward *= 4.4
                             elif "ARCANA" in pack_type:
-                                base_reward *= 4.4
+                                base_reward *= 3.4
                             elif "CELESTIAL" in pack_type:
-                                base_reward *= 5.3
+                                base_reward *= 3.6
                             
                             if "JUMBO" in pack_type or "MEGA" in pack_type:
                                 base_reward *= 5.5  
@@ -1055,17 +1064,17 @@ class BalatroEnv:
         score_progress = min(1.0, self.game_manager.current_score / self.game_manager.game.current_blind)
         
         ante_factor = max(1.0, 4.0 / current_ante)
-        progress_reward = score_progress * 10.0 * ante_factor
+        progress_reward = score_progress * 30.0 * ante_factor
         
         if self.game_manager.current_ante_beaten:
-            progress_reward += 25.0
+            progress_reward += 125.0
         
         hand_quality_reward = 0
         if self.game_manager.hand_result:
             if current_ante <= 3:
                 early_hand_map = {
-                    HandType.HIGH_CARD: 0.0,
-                    HandType.PAIR: 1.0,
+                    HandType.HIGH_CARD: -5.0,
+                    HandType.PAIR: -5.0,
                     HandType.TWO_PAIR: 25.0,
                     HandType.THREE_OF_A_KIND: 30.0,
                     HandType.STRAIGHT: 75.0,
@@ -1077,8 +1086,8 @@ class BalatroEnv:
                 hand_quality_reward = early_hand_map.get(self.game_manager.hand_result, 0.5)
             else:
                 late_hand_map = {
-                    HandType.HIGH_CARD: -1.0,
-                    HandType.PAIR: 0.0,
+                    HandType.HIGH_CARD: -3.0,
+                    HandType.PAIR: -2.0,
                     HandType.TWO_PAIR: 20.0,
                     HandType.THREE_OF_A_KIND: 20.0,
                     HandType.STRAIGHT: 45.0,
@@ -1090,7 +1099,7 @@ class BalatroEnv:
                 hand_quality_reward = late_hand_map.get(self.game_manager.hand_result, 0.5)
         
         cards_played = len(self.game_manager.played_cards)
-        if cards_played >= 5:
+        if cards_played == 5:
             cards_bonus = 4.0 + (cards_played - 5)
         else:
             cards_bonus = 0.5 * cards_played
@@ -1105,7 +1114,7 @@ class BalatroEnv:
         
         game_over_penalty = 0
         if self.game_manager.game_over:
-            base_penalty = -30.0
+            base_penalty = -300.0
             ante_multiplier = max(1.0, 5.0 / current_ante)
             game_over_penalty = base_penalty * ante_multiplier
         
@@ -2231,11 +2240,20 @@ class StrategyAgent:
         for state, action, reward, next_state, done in self.memory:
             priority = abs(reward) + 0.1  
             
+            joker_count = 0
+            if isinstance(state, np.ndarray) and len(state) > 3:
+                joker_count = state[3]
+            
             if action < 4 and reward > 0:
-                priority *= 8.0  
+                priority *= 5.0  
                 
+                if joker_count < 3:
+                    priority *= 1.5
+                elif joker_count >= 3 and joker_count < 5:
+                    priority *= 2.0
+                    
             if action == 15 and reward > 0:
-                priority *= 1.5  
+                priority *= 1.8
                 
             priorities.append(priority)
         
@@ -2489,7 +2507,7 @@ def train_with_separate_agents():
     
     add_demonstration_examples(play_agent, num_examples=200)
     
-    episodes = 7500
+    episodes = 5000
     batch_size = 64
     log_interval = 500
     #save_interval = 1000
