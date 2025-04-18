@@ -1646,7 +1646,7 @@ class PlayingAgent:
         self.state_size = state_size
         self.action_size = action_size
         self.memory = deque(maxlen=5000)
-        self.gamma = 0.95                  
+        self.gamma = 0.99                  
         self.epsilon = 1.0                 
         self.epsilon_min = 0.01            
         self.epsilon_decay = 0.995         
@@ -2000,7 +2000,7 @@ class StrategyAgent:
         self.memory = deque(maxlen=10000) 
         self.gamma = 0.99                 
         self.epsilon = 1.0                 
-        self.epsilon_min = 0.05            
+        self.epsilon_min = 0.1            
         self.epsilon_decay = 0.998         
         self.learning_rate = learning_rate
         self.model = self._build_model()
@@ -2507,7 +2507,7 @@ def train_with_separate_agents():
     
     add_demonstration_examples(play_agent, num_examples=200)
     
-    episodes = 5000
+    episodes = 7500
     batch_size = 64
     log_interval = 500
     #save_interval = 1000
@@ -2806,7 +2806,7 @@ def plot_training_metrics(episodes, win_history, max_ante_history, win_rate_over
     plt.scatter(np.arange(1, len(max_ante_history) + 1), max_ante_history, 
                alpha=0.3, s=3, c=max_ante_history, cmap='viridis')
     
-    plt.axhline(y=8, color='r', linestyle='--', alpha=0.7, label='Win Threshold (Round 24)')
+    plt.axhline(y=24, color='r', linestyle='--', alpha=0.7, label='Win Threshold (Round 24)')
     
     plt.title('Max Round Reached per Episode')
     plt.xlabel('Episode')
