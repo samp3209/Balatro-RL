@@ -18,17 +18,6 @@ class EnhancementManager:
                                  active_boss_blind_effect: Optional[BossBlindEffect] = None) -> Tuple[int, int]:
         """
         Apply enhancement effects to the score based on cards in hand
-        
-        Args:
-            cards: List of cards to evaluate
-            hand_type: The hand type being scored
-            base_mult: Base multiplier value
-            base_chips: Base chip value
-            is_boss_blind: Whether a boss blind effect is active
-            active_boss_blind_effect: The active boss blind effect, if any
-            
-        Returns:
-            Tuple of (total_mult, total_chips) after applying enhancements
         """
         total_mult = base_mult
         total_chips = base_chips
@@ -82,13 +71,6 @@ class EnhancementManager:
     def process_enhancement_after_hand(cards: List[Card], inventory) -> Dict[str, int]:
         """
         Process enhancement effects that happen after a hand is played
-        
-        Args:
-            cards: All cards involved in the hand
-            inventory: The game inventory
-            
-        Returns:
-            Dict with effects like {'money_gained': X}
         """
         result = {'money_gained': 0}
         
@@ -107,12 +89,6 @@ class EnhancementManager:
     
     @staticmethod
     def apply_wild_card_effects(cards: List[Card]) -> None:
-        """
-        Special handling for wild cards in hand evaluation
-        
-        Args:
-            cards: Cards being evaluated
-        """
 
         pass
 
@@ -121,12 +97,6 @@ def enhance_card(card: Card, enhancement: CardEnhancement) -> Card:
     """
     Apply an enhancement to a card and return the enhanced card
     
-    Args:
-        card: The card to enhance
-        enhancement: The enhancement to apply
-        
-    Returns:
-        The enhanced card
     """
     card.apply_enhancement(enhancement)
     return card
@@ -134,25 +104,11 @@ def enhance_card(card: Card, enhancement: CardEnhancement) -> Card:
 def count_enhanced_cards(cards: List[Card], enhancement: CardEnhancement) -> int:
     """
     Count cards with a specific enhancement
-    
-    Args:
-        cards: List of cards to check
-        enhancement: The enhancement to look for
-        
-    Returns:
-        Number of cards with that enhancement
     """
     return sum(1 for card in cards if card.enhancement == enhancement)
 
 def get_enhanced_cards(cards: List[Card], enhancement: CardEnhancement) -> List[Card]:
     """
     Get all cards with a specific enhancement
-    
-    Args:
-        cards: List of cards to check
-        enhancement: The enhancement to look for
-        
-    Returns:
-        List of cards with that enhancement
     """
     return [card for card in cards if card.enhancement == enhancement]

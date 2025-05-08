@@ -92,13 +92,6 @@ class Planet:
     def apply_effect(self, hand_type, game_state: Dict) -> Dict:
         """
         Apply the planet's effect based on the hand type
-        
-        Args:
-            hand_type: The hand type being played
-            game_state: Dictionary containing game state information
-            
-        Returns:
-            Dictionary containing effect details
         """
         result = {
             'message': f"Used {self.name} planet card",
@@ -129,12 +122,6 @@ def create_random_planet() -> Planet:
 def create_planet_by_name(name: str) -> Optional[Planet]:
     """
     Create a Planet card object by name
-    
-    Args:
-        name: The name of the planet (e.g., "Mars", "Venus", "Jupiter")
-        
-    Returns:
-        A Planet card object with appropriate properties
     """
     planet_name = name.lower().strip()
     

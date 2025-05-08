@@ -298,11 +298,6 @@ class Inventory:
     def reset_deck(self, played_cards: List[Card], discarded_cards: List[Card], hand_cards: List[Card]):
         """
         Reset the deck by returning all played and discarded cards to the deck
-        
-        Args:
-            played_cards: Cards that were played
-            discarded_cards: Cards that were discarded
-            hand_cards: Cards still in hand
         """
         self.deck = []
         

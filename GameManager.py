@@ -91,12 +91,6 @@ class GameManager:
     def play_cards(self, card_indices: List[int]) -> Tuple[bool, str]:
         """
         Play cards from the current hand
-        
-        Args:
-            card_indices: List of indices of cards to play from the current hand
-            
-        Returns:
-            Tuple of (success, message)
         """
         if not card_indices:
             return (False, "No cards selected to play")
@@ -244,12 +238,6 @@ class GameManager:
     def discard_cards(self, card_indices: List[int]) -> Tuple[bool, str]:
         """
         Discard cards from the current hand and draw replacements
-        
-        Args:
-            card_indices: List of indices of cards to discard from the current hand
-            
-        Returns:
-            Tuple of (success, message)
         """
         self.discarded_indices = card_indices.copy()
 
@@ -288,9 +276,6 @@ class GameManager:
     def get_best_hand_from_current(self) -> Optional[Tuple[HandType, List[Card]]]:
         """
         Evaluate the current hand to determine the best possible hand
-        
-        Returns:
-            Tuple of (best_hand_type, cards_in_best_hand) or None if hand is empty
         """
         if not self.current_hand:
             return None
@@ -302,9 +287,6 @@ class GameManager:
     def get_recommended_play(self) -> Tuple[List[int], str]:
         """
         Get a recommended play based on the current hand
-        
-        Returns:
-            Tuple of (recommended_card_indices, explanation)
         """
         forced_card = None
         if (self.game.is_boss_blind and 
@@ -442,13 +424,6 @@ class GameManager:
     def use_tarot(self, tarot_index: int, selected_card_indices: List[int]) -> Tuple[bool, str]:
         """
         Use a tarot card with selected cards
-        
-        Args:
-            tarot_index: Index of the tarot card in consumables
-            selected_card_indices: Indices of selected cards from the current hand
-            
-        Returns:
-            Tuple of (success, message)
         """
         tarot_indices = self.game.inventory.get_consumable_tarot_indices()
         
@@ -484,12 +459,6 @@ class GameManager:
     def use_planet(self, planet_index: int) -> Tuple[bool, str]:
         """
         Use a planet card with the current hand type
-        
-        Args:
-            planet_index: Index of the planet card in consumables
-            
-        Returns:
-            Tuple of (success, message)
         """
         planet_indices = self.game.inventory.get_consumable_planet_indices()
         

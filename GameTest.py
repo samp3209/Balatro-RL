@@ -101,12 +101,6 @@ def print_planet_levels(inventory):
 def get_shop_item_contents(shop_item):
     """
     Extract contents directly from a shop item if available
-    
-    Args:
-        shop_item: The shop item object
-        
-    Returns:
-        list: Contents of the item if it's a booster pack, otherwise None
     """
     if shop_item.item_type == ShopItemType.BOOSTER:
         pack_type = str(shop_item.item)
@@ -252,10 +246,6 @@ def handle_shop_interaction(game_manager, shop):
 def use_pending_tarots(game_manager, pending_tarots):
     """
     Use tarot cards that were purchased from the shop
-    
-    Args:
-        game_manager: The game manager instance
-        pending_tarots: List of tarot names to use
     """
     if not pending_tarots:
         return
@@ -301,12 +291,6 @@ def use_pending_tarots(game_manager, pending_tarots):
 def get_pack_contents(pack_type):
     """
     Get the contents of a pack based on its type
-    
-    Args:
-        pack_type: The type of pack (e.g., "Standard Pack")
-        
-    Returns:
-        list: The contents of the pack
     """
     try:
         pack_enum = None
@@ -372,15 +356,6 @@ def get_shop_for_current_ante(game_manager, all_shops):
 def handle_pack_opening(pack_type, pack_contents, inventory, game_manager=None):
     """
     Handle opening a booster pack and selecting items from it
-    
-    Args:
-        pack_type (str): The type of pack (Standard, Celestial, Arcana, etc.)
-        pack_contents (list): List of items in the pack
-        inventory: The game inventory to add items to
-        game_manager: Optional GameManager for tarot card usage
-        
-    Returns:
-        str: Message about what happened with the pack
     """
     from JokerCreation import create_joker
     from Tarot import create_tarot_by_name

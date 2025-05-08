@@ -126,15 +126,6 @@ class Game:
                             base_mult: int, base_chips: int) -> Tuple[int, int]:
         """
         Apply all card enhancement effects to the score
-        
-        Args:
-            played_cards: Cards that were played
-            hand_type: The hand type being scored
-            base_mult: Base multiplier value
-            base_chips: Base chip value
-            
-        Returns:
-            Tuple of (total_mult, total_chips) after applying enhancements
         """
         total_mult, total_chips = EnhancementManager.apply_enhancement_effects(
             played_cards, 
@@ -151,13 +142,6 @@ class Game:
     def process_post_hand_enhancements(self, played_cards: List[Card], hand_cards: List[Card]) -> Dict:
         """
         Process enhancement effects that happen after a hand is played or discarded
-        
-        Args:
-            played_cards: Cards that were played in the hand
-            hand_cards: Cards that are still in hand
-            
-        Returns:
-            Dict with effects like {'money_gained': X}
         """
         all_cards = played_cards + hand_cards
         result = EnhancementManager.process_enhancement_after_hand(all_cards, self.inventory)
@@ -284,10 +268,6 @@ class Game:
         """
         Evaluate the played cards to determine the best possible hand type
         Also identify all possible hand types contained within the played cards
-        
-        Returns:
-            Tuple of (best_hand_type, contained_hand_types)
-            where contained_hand_types is a dict of {hand_type_name: exists_bool}
         """
         if not played_cards or len(played_cards) < 5:
             return (HandType.HIGH_CARD, {"high_card": True})
@@ -489,10 +469,6 @@ class Game:
     def apply_joker_effects(self, played_cards: List[Card], hand_type: HandType, contained_hands: Dict[str, bool]) -> Tuple[int, int, int]:
         """
         Apply all joker effects based on the current state
-        
-        Returns:
-            Tuple of (total_mult, base_chips, money_gained)
-            The caller should multiply total_mult by base_chips to get the final score
         """
         base_mult, base_chips = self.inventory.calculate_hand_value(hand_type, {
             'stake_multiplier': self.stake_multiplier

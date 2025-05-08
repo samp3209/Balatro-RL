@@ -44,7 +44,7 @@ class BalatroEnv:
 
 
     def start_new_game(self):
-        """Initialize game and shop consistently, similar to GameTest.py"""
+        """Initialize game and shop"""
         self.game_manager.start_new_game()
         
         if self.config['simplified']:
@@ -84,7 +84,7 @@ class BalatroEnv:
         return self._get_play_state()
     
     def update_shop(self):
-        """Update the shop for the current ante with improved reliability"""
+        """Update the shop for the current round"""
         current_ante = self.game_manager.game.current_ante
         
         if current_ante > 24:
@@ -143,7 +143,7 @@ class BalatroEnv:
                 print(f"  {i}: [Empty]")
 
     def step_strategy(self, action):
-        """Process a strategy action with IMPROVED reward signals and better item handling"""
+        """Process a strategy action"""
         if self.game_manager.game.current_ante > 24:
             print("Game already completed! Starting new game.")
             self.reset()
@@ -507,12 +507,6 @@ class BalatroEnv:
     def get_shop_item_contents(self, shop_item):
         """
         Extract contents directly from a shop item if available
-        
-        Args:
-            shop_item: The shop item object
-            
-        Returns:
-            list: Contents of the item if it's a booster pack, otherwise None
         """
         if shop_item.item_type == ShopItemType.BOOSTER:
             pack_type = str(shop_item.item)
@@ -528,12 +522,6 @@ class BalatroEnv:
     def get_pack_contents(self, pack_type):
         """
         Get the contents of a pack based on its type
-        
-        Args:
-            pack_type: The type of pack (e.g., "Standard Pack")
-            
-        Returns:
-            list: The contents of the pack
         """
         try:
             pack_enum = None
@@ -576,15 +564,6 @@ class BalatroEnv:
     def handle_pack_opening(self, pack_type, pack_contents, inventory, game_manager=None):
         """
         Handle opening a booster pack and selecting items from it
-        
-        Args:
-            pack_type (str): The type of pack (Standard, Celestial, Arcana, etc.)
-            pack_contents (list): List of items in the pack
-            inventory: The game inventory to add items to
-            game_manager: Optional GameManager for tarot card usage
-            
-        Returns:
-            str: Message about what happened with the pack
         """
         from JokerCreation import create_joker
         from Tarot import create_tarot_by_name
@@ -806,12 +785,6 @@ class BalatroEnv:
     def use_specific_tarot(self, tarot_name):
         """
         Use a specific tarot card by name
-        
-        Args:
-            tarot_name (str): Name of the tarot to use
-            
-        Returns:
-            bool: True if tarot was used successfully, False otherwise
         """
         tarot_indices = self.game_manager.game.inventory.get_consumable_tarot_indices()
         tarot_index = None
@@ -868,7 +841,7 @@ class BalatroEnv:
 
 
     def step_play(self, action):
-        """Process a playing action with stricter enforcement of rules"""
+        """Process a playing action"""
         self.episode_step += 1
         
         if (self.game_manager.hands_played >= self.game_manager.max_hands_per_round and 
@@ -1058,7 +1031,7 @@ class BalatroEnv:
         return 26
     
     def _calculate_play_reward(self):
-        """Drastically improved reward calculation with ante-specific adjustments"""
+        """calculates reward for played action"""
         current_ante = self.game_manager.game.current_ante
         
         score_progress = min(1.0, self.game_manager.current_score / self.game_manager.game.current_blind)
@@ -1219,12 +1192,6 @@ class BalatroEnv:
     def _encode_jokers(self, jokers):
         """
         Encode jokers into a feature vector for the neural network.
-        
-        Args:
-            jokers: List of joker objects
-            
-        Returns:
-            numpy array of encoded joker features
         """
         max_jokers = 5 
         features_per_joker = 6  
@@ -1262,9 +1229,6 @@ class BalatroEnv:
     def _encode_consumables(self):
         """
         Encode consumables (tarot and planet cards) into a feature vector.
-        
-        Returns:
-            numpy array of encoded consumable features
         """
         max_consumables = 2 
         features_per_consumable = 5
@@ -1327,9 +1291,6 @@ class BalatroEnv:
     def _encode_shop_items(self):
         """
         Encode shop items into a feature vector.
-        
-        Returns:
-            numpy array of encoded shop item features
         """
 
         max_shop_items = 4 
@@ -1374,9 +1335,6 @@ class BalatroEnv:
     def _encode_planet_levels(self):
         """
         Encode planet levels into a feature vector.
-        
-        Returns:
-            numpy array of encoded planet level features
         """
         encoded = []
         
@@ -1393,9 +1351,6 @@ class BalatroEnv:
     def use_pending_tarots(self, limit=None):
         """
         Use tarot cards that were purchased from the shop
-        
-        Args:
-            limit (int, optional): Maximum number of tarots to use
         """
         if not self.pending_tarots:
             return False
@@ -1447,7 +1402,7 @@ class BalatroEnv:
 
 
     def get_valid_play_actions(self):
-        """Return valid play actions with proper handling for end-of-round cases"""
+        """Return valid play actions"""
         valid_actions = []
         
         hands_limit_reached = self.game_manager.hands_played >= self.game_manager.max_hands_per_round
@@ -1537,7 +1492,7 @@ class BalatroEnv:
         return action
 
     def get_valid_strategy_actions(self):
-        """Return valid strategy actions based on current game state with better prioritization"""
+        """Return valid strategy actions based on current game state """
         valid_actions = []
         
         if not hasattr(self, 'current_shop') or self.current_shop is None:
@@ -1609,12 +1564,6 @@ class BalatroEnv:
     def _convert_action_to_card_indices(self, action):
         """
         Convert an action integer into a list of card indices to play or discard
-        
-        Args:
-            action: Integer representing the action
-            
-        Returns:
-            List of card indices to play/discard
         """
         action_type = action // 256
         
@@ -1629,12 +1578,6 @@ class BalatroEnv:
     def is_discard_action(self, action):
         """
         Check if an action is a discard (vs play) action
-        
-        Args:
-            action: Integer representing the action
-            
-        Returns:
-            Boolean indicating if this is a discard action
         """
         return action >= 256
 
@@ -1663,7 +1606,7 @@ class PlayingAgent:
         self.DISCARD_ACTION = 1
         
     def _build_model(self):
-        """Build a more sophisticated neural network for predicting Q-values"""
+        """neural network for predicting Q-values"""
         model = Sequential()
         
         model.add(Dense(256, input_dim=self.state_size, activation='relu'))
@@ -1691,7 +1634,7 @@ class PlayingAgent:
         self.recent_rewards.append(reward)
         
     def act(self, state, valid_actions=None):
-        """Choose an action with robust input validation"""
+        """Choose an action"""
         if not isinstance(state, np.ndarray):
             state = np.array(state, dtype=np.float32)
             
@@ -1735,7 +1678,7 @@ class PlayingAgent:
         return action_type, card_indices, f"{action_name} cards {card_indices}"
         
     def replay(self, batch_size):
-        """Improved learning strategy with better experience prioritization"""
+        """learning strategy with better experience prioritization"""
         if len(self.memory) < batch_size:
             return
         
@@ -1862,8 +1805,7 @@ class PlayingAgent:
         
     def evaluate_all_possible_plays(self, hand, evaluator):
         """
-        Evaluate all possible card combinations to find the best hand
-        This can be used to supplement RL training with expert demonstrations
+        Evaluate all possible card combinations to find the best hand used to supplement RL training with expert demonstrations
         """
         best_score = 0
         best_cards = []
@@ -1916,7 +1858,7 @@ class PlayingAgent:
         return np.argmax(act_values[0])
     
     def _estimate_hand_quality(self, state):
-        """Estimate the quality of the current hand (helper for adaptive_exploration)"""
+        """Estimate the quality of the current hand"""
         if hasattr(self, 'game_manager') and self.game_manager.current_hand:
             best_hand_info = self.game_manager.get_best_hand_from_current()
             if best_hand_info:
@@ -2053,7 +1995,7 @@ class StrategyAgent:
         self.target_model.set_weights(self.model.get_weights())
 
     def remember(self, state, action, reward, next_state, done):
-        """Store experience in replay memory with robust state size handling"""
+        """Store experience in replay memory"""
         if not isinstance(state, np.ndarray):
             state = np.array(state, dtype=np.float32)
         if not isinstance(next_state, np.ndarray):
@@ -2081,7 +2023,7 @@ class StrategyAgent:
         self.recent_rewards.append(reward)
     
     def act(self, state, valid_actions=None):
-        """Choose an action with robust state size handling"""
+        """Choose an action"""
         if not isinstance(state, np.ndarray):
             state = np.array(state, dtype=np.float32)
             
@@ -2114,7 +2056,7 @@ class StrategyAgent:
         return np.argmax(act_values[0])
     
     def replay(self, batch_size):
-        """Train the agent with experiences from memory with size adaptation"""
+        """Train the agent with experiences from memory"""
         if len(self.memory) < batch_size:
             return
         
@@ -2191,7 +2133,7 @@ class StrategyAgent:
         self.model.save(file_path)
     
     def load_model(self, file_path):
-        """Load model from file with compatibility check"""
+        """Load model from file"""
         try:
             loaded_model = tf.keras.models.load_model(file_path)
             
@@ -2232,7 +2174,7 @@ class StrategyAgent:
         }
 
     def prioritized_strategy_replay(self, batch_size):
-        """Train the agent with prioritized replay focusing on successful purchases"""
+        """Train the agent"""
         if len(self.memory) < batch_size:
             return
         
@@ -2334,7 +2276,7 @@ class StrategyAgent:
 
 def use_pending_tarots(self):
     """
-    Use tarot cards that were purchased from the shop, similar to GameTest.py
+    Use tarot cards that were purchased from the shop
     """
     if not self.pending_tarots:
         return False
@@ -2384,7 +2326,7 @@ def use_pending_tarots(self):
 
 
 def create_shop_for_ante(ante_number, blind_type):
-    """Create a new shop with appropriate items for the specified ante and blind type"""
+    """Create a new shop"""
     print(f"Creating new shop for Ante {ante_number}, {blind_type}")
     
     try:
@@ -2404,7 +2346,7 @@ def create_shop_for_ante(ante_number, blind_type):
     
 
 def add_demonstration_examples(play_agent, num_examples=300):
-    """Add expert demonstration examples to the agent's memory with better poker hand recognition"""
+    """Add expert demonstration examples to the agent's memory"""
     env = BalatroEnv(config={'simplified': True})
     hand_evaluator = HandEvaluator()
     
@@ -2489,7 +2431,7 @@ def add_demonstration_examples(play_agent, num_examples=300):
 
 
 def train_with_separate_agents():
-    """Training function with improved shop behavior for Balatro RL agent and win tracking"""
+    """Training function"""
     
     env = BalatroEnv(config={})
     

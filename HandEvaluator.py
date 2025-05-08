@@ -327,15 +327,6 @@ class HandEvaluator:
         """
         Analyze a hand to determine the best hand type, all contained hand types,
         and the cards that make up the best hand.
-        
-        Args:
-            cards: List of cards to evaluate
-            
-        Returns:
-            Tuple containing:
-            - The best hand type
-            - Dictionary of all contained hand types
-            - List of cards that make up the best hand
         """
         best_type, patterns = HandEvaluator.analyze_hand(cards)
         
@@ -351,10 +342,6 @@ class HandEvaluator:
     def mark_scoring_cards(cards: List[Card], scoring_cards: List[Card]):
         """
         Mark cards that are part of the scoring hand
-        
-        Args:
-            cards: All cards being played
-            scoring_cards: Cards that make up the best hand
         """
         for card in cards:
             card.scored = False
@@ -369,12 +356,6 @@ class HandEvaluator:
     def get_contained_hand_types(patterns: Dict[HandType, List[HandPattern]]) -> Dict[str, bool]:
         """
         Convert patterns dictionary to a simpler format of contained hand types
-        
-        Args:
-            patterns: Dictionary mapping hand types to lists of patterns
-            
-        Returns:
-            Dictionary mapping hand type names to boolean indicating presence
         """
         contained_hands = {
             "high_card": bool(patterns[HandType.HIGH_CARD]),
@@ -394,12 +375,6 @@ class HandEvaluator:
     def get_best_pattern(patterns: Dict[HandType, List[HandPattern]]) -> Optional[HandPattern]:
         """
         Get the best hand pattern from all identified patterns
-        
-        Args:
-            patterns: Dictionary mapping hand types to lists of patterns
-            
-        Returns:
-            The best hand pattern or None if no patterns exist
         """
         for hand_type in [HandType.STRAIGHT_FLUSH, HandType.FOUR_OF_A_KIND, 
                          HandType.FULL_HOUSE, HandType.FLUSH, HandType.STRAIGHT, 

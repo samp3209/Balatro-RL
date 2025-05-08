@@ -61,7 +61,7 @@ class Card:
         return self.enhancement == CardEnhancement.WILD
     
     def has_no_rank_or_suit(self) -> bool:
-        """Check if this card has no rank or suit (e.g., Stone cards)"""
+        """Check if this card has no rank or suit (Stone cards)"""
         return self.enhancement == CardEnhancement.STONE
     
     def get_gold_money(self) -> int:
